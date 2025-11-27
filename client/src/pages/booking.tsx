@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { Check, ChevronRight, ChevronLeft, Clock, Calendar as CalendarIcon, CreditCard, Copy, Loader2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { format, addDays, isSameDay, setHours, setMinutes } from "date-fns";
+import { format, addDays, isSameDay, setHours, setMinutes, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Link } from "wouter";
 
@@ -53,6 +53,26 @@ export default function BookingPage() {
       }
     }
   }, [selectedService, barbers]);
+
+  // Helper to check if a time slot is occupied
+  const isTimeSlotOccupied = (time: string) => {
+    if (!date || !selectedBarber) return false;
+    
+    return appointments.some(apt => {
+      // Only check appointments for the selected barber
+      if (apt.barberId !== selectedBarber) return false;
+      if (apt.status === 'cancelled') return false;
+
+      const aptDate = parseISO(apt.date);
+      
+      // Check if it's the same day
+      if (!isSameDay(aptDate, date)) return false;
+
+      // Check if it's the same time
+      const aptTime = format(aptDate, "HH:mm");
+      return aptTime === time;
+    });
+  };
 
   const handleNext = () => {
     if (step === 1 && !selectedService) {
@@ -274,16 +294,26 @@ export default function BookingPage() {
             <div className="flex-1">
               <h3 className="font-heading text-lg font-bold mb-4">Horários Disponíveis</h3>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                {TIME_SLOTS.map((time) => (
-                  <Button
-                    key={time}
-                    variant={selectedTime === time ? "default" : "outline"}
-                    onClick={() => setSelectedTime(time)}
-                    className={`w-full ${selectedTime === time ? "bg-primary text-white hover:bg-primary/90" : "hover:border-primary"}`}
-                  >
-                    {time}
-                  </Button>
-                ))}
+                {TIME_SLOTS.map((time) => {
+                  const isOccupied = isTimeSlotOccupied(time);
+                  return (
+                    <Button
+                      key={time}
+                      variant={selectedTime === time ? "default" : "outline"}
+                      onClick={() => !isOccupied && setSelectedTime(time)}
+                      disabled={isOccupied}
+                      className={`w-full ${
+                        selectedTime === time 
+                          ? "bg-primary text-white hover:bg-primary/90" 
+                          : isOccupied 
+                            ? "opacity-50 cursor-not-allowed bg-muted text-muted-foreground hover:bg-muted hover:text-muted-foreground border-border"
+                            : "hover:border-primary"
+                      }`}
+                    >
+                      {time}
+                    </Button>
+                  );
+                })}
               </div>
               {date && selectedTime && (
                 <div className="mt-6 p-4 bg-primary/10 border border-primary/30 rounded-lg text-center">
