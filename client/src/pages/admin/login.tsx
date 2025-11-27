@@ -7,8 +7,8 @@ import { Scissors, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function AdminLogin() {
-  const [email, setEmail] = useState("admin@bronks.com");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -20,11 +20,11 @@ export default function AdminLogin() {
     // Fake auth delay
     setTimeout(() => {
       setIsLoading(false);
-      if (password === "admin123") {
+      if (email === "bronks@" && password === "bronks@1") {
         toast({ title: "Bem-vindo, Chefe!", description: "Login realizado com sucesso." });
         setLocation("/admin/dashboard");
       } else {
-        toast({ title: "Erro", description: "Senha incorreta.", variant: "destructive" });
+        toast({ title: "Erro", description: "Credenciais inválidas.", variant: "destructive" });
       }
     }, 1000);
   };
@@ -45,12 +45,13 @@ export default function AdminLogin() {
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Email</label>
+              <label className="text-sm font-medium">Login</label>
               <Input 
-                type="email" 
+                type="text"
                 value={email} 
                 onChange={(e) => setEmail(e.target.value)}
                 className="bg-black/50 border-primary/20 focus:border-primary h-12"
+                placeholder="Digite seu login"
               />
             </div>
             <div className="space-y-2">
@@ -61,6 +62,7 @@ export default function AdminLogin() {
                   value={password} 
                   onChange={(e) => setPassword(e.target.value)}
                   className="bg-black/50 border-primary/20 focus:border-primary h-12 pl-10"
+                  placeholder="Digite sua senha"
                 />
                 <Lock className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground" />
               </div>
@@ -70,10 +72,6 @@ export default function AdminLogin() {
               {isLoading ? "ENTRANDO..." : "ACESSAR PAINEL"}
             </Button>
           </form>
-          
-          <div className="mt-6 text-center text-xs text-muted-foreground">
-            <p>Dica: Senha é "admin123"</p>
-          </div>
         </CardContent>
       </Card>
     </div>
