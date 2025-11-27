@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { SERVICES, BARBERS, PLATFORM_FEE } from "@/lib/mockData";
+import { useData } from "@/context/DataContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
@@ -20,6 +20,8 @@ const TIME_SLOTS = [
 ];
 
 export default function BookingPage() {
+  const { services, barbers, appointments, addAppointment, platformFee } = useData();
+  
   const [step, setStep] = useState(1);
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [selectedBarber, setSelectedBarber] = useState<string | null>(null);
@@ -31,9 +33,26 @@ export default function BookingPage() {
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const { toast } = useToast();
 
-  const service = SERVICES.find(s => s.id === selectedService);
-  const barber = BARBERS.find(b => b.id === selectedBarber);
-  const total = service ? service.price + PLATFORM_FEE : 0;
+  const service = services.find(s => s.id === selectedService);
+  const barber = barbers.find(b => b.id === selectedBarber);
+  
+  // Calculate total with the dynamic platform fee
+  const total = service ? service.price + platformFee : 0;
+
+  // Filter barbers based on selected service
+  const availableBarbers = selectedService 
+    ? barbers.filter(b => b.serviceIds.includes(selectedService))
+    : [];
+
+  // Reset barber selection if service changes and current barber doesn't support it
+  useEffect(() => {
+    if (selectedBarber && selectedService) {
+      const b = barbers.find(b => b.id === selectedBarber);
+      if (b && !b.serviceIds.includes(selectedService)) {
+        setSelectedBarber(null);
+      }
+    }
+  }, [selectedService, barbers]);
 
   const handleNext = () => {
     if (step === 1 && !selectedService) {
@@ -65,6 +84,24 @@ export default function BookingPage() {
     setTimeout(() => {
       setIsProcessingPayment(false);
       setPaymentConfirmed(true);
+      
+      // Add to store
+      if (service && barber && date && selectedTime) {
+        // Create date object with time
+        const [hours, minutes] = selectedTime.split(':').map(Number);
+        const aptDate = setMinutes(setHours(date, hours), minutes);
+
+        addAppointment({
+          serviceId: service.id,
+          barberId: barber.id,
+          date: aptDate.toISOString(),
+          customerName,
+          customerPhone,
+          status: "confirmed",
+          totalPrice: total
+        });
+      }
+
       toast({ 
         title: "Pagamento Confirmado!", 
         description: "Seu agendamento foi realizado com sucesso.",
@@ -154,7 +191,7 @@ export default function BookingPage() {
             exit={{ opacity: 0, x: -20 }}
             className="grid grid-cols-1 md:grid-cols-2 gap-4"
           >
-            {SERVICES.map((s) => (
+            {services.map((s) => (
               <div 
                 key={s.id}
                 onClick={() => setSelectedService(s.id)}
@@ -166,7 +203,7 @@ export default function BookingPage() {
               >
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="font-heading text-xl font-bold">{s.name}</h3>
-                  <span className="text-primary font-bold font-mono">R$ {s.price}</span>
+                  <span className="text-primary font-bold font-mono">R$ {s.price.toFixed(2)}</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-4">{s.description}</p>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 w-fit px-2 py-1 rounded">
@@ -184,27 +221,34 @@ export default function BookingPage() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className="grid grid-cols-1 sm:grid-cols-3 gap-4"
           >
-            {BARBERS.map((b) => (
-              <div 
-                key={b.id}
-                onClick={() => setSelectedBarber(b.id)}
-                className={`cursor-pointer p-6 rounded-xl border-2 flex flex-col items-center gap-4 transition-all ${
-                  selectedBarber === b.id 
-                    ? "border-primary bg-primary/5 scale-105" 
-                    : "border-border bg-card hover:border-primary/50"
-                }`}
-              >
-                <div className="h-24 w-24 rounded-full overflow-hidden bg-muted border-2 border-border">
-                  <img src={b.avatar} alt={b.name} className="w-full h-full object-cover" />
-                </div>
-                <div className="text-center">
-                  <h3 className="font-heading font-bold">{b.name}</h3>
-                  <p className="text-xs text-muted-foreground">Barbeiro Senior</p>
-                </div>
+            {availableBarbers.length === 0 ? (
+              <div className="text-center py-10">
+                 <p className="text-muted-foreground">Nenhum profissional disponível para este serviço no momento.</p>
               </div>
-            ))}
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {availableBarbers.map((b) => (
+                  <div 
+                    key={b.id}
+                    onClick={() => setSelectedBarber(b.id)}
+                    className={`cursor-pointer p-6 rounded-xl border-2 flex flex-col items-center gap-4 transition-all ${
+                      selectedBarber === b.id 
+                        ? "border-primary bg-primary/5 scale-105" 
+                        : "border-border bg-card hover:border-primary/50"
+                    }`}
+                  >
+                    <div className="h-24 w-24 rounded-full overflow-hidden bg-muted border-2 border-border">
+                      <img src={b.avatar} alt={b.name} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="text-center">
+                      <h3 className="font-heading font-bold">{b.name}</h3>
+                      <p className="text-xs text-muted-foreground">Barbeiro Senior</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -291,7 +335,7 @@ export default function BookingPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Taxa de Serviço</span>
-                  <span>R$ {PLATFORM_FEE.toFixed(2)}</span>
+                  <span>R$ {platformFee.toFixed(2)}</span>
                 </div>
                 <Separator className="my-2" />
                 <div className="flex justify-between text-lg font-bold text-primary">

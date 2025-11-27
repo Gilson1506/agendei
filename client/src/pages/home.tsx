@@ -3,9 +3,11 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Calendar, Scissors, Clock, Star } from "lucide-react";
 import interiorImage from "@assets/generated_images/dark_neon_barbershop_interior.png";
-import { SERVICES } from "@/lib/mockData";
+import { useData } from "@/context/DataContext";
 
 export default function Home() {
+  const { services } = useData();
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
@@ -91,7 +93,7 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {SERVICES.map((service, index) => (
+          {services.map((service, index) => (
             <motion.div
               key={service.id}
               initial={{ opacity: 0, y: 20 }}

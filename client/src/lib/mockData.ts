@@ -1,4 +1,4 @@
-import { addDays, format, setHours, setMinutes } from "date-fns";
+import { addDays } from "date-fns";
 
 export type Service = {
   id: string;
@@ -13,6 +13,7 @@ export type Barber = {
   id: string;
   name: string;
   avatar: string;
+  serviceIds: string[]; // IDs of services this barber performs
 };
 
 export type Appointment = {
@@ -70,16 +71,19 @@ export const BARBERS: Barber[] = [
     id: "1",
     name: "Matheus 'Navalha'",
     avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Matheus&backgroundColor=b6e3f4",
+    serviceIds: ["1", "2", "3", "4", "5"],
   },
   {
     id: "2",
     name: "Lucas 'Fade'",
     avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Lucas&backgroundColor=c0aede",
+    serviceIds: ["1", "4"],
   },
   {
     id: "3",
     name: "João 'Bigode'",
     avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Joao&backgroundColor=ffdfbf",
+    serviceIds: ["2", "3", "5"],
   },
 ];
 
@@ -93,7 +97,7 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
     customerName: "Carlos Silva",
     customerPhone: "11999999999",
     status: "confirmed",
-    totalPrice: 70, // 60 + 10 fee
+    totalPrice: 68.50, // 60 + 8.50 fee
     createdAt: new Date().toISOString(),
   },
   {
@@ -104,9 +108,9 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
     customerName: "Pedro Santos",
     customerPhone: "11988888888",
     status: "pending",
-    totalPrice: 50, // 40 + 10 fee
+    totalPrice: 48.50, // 40 + 8.50 fee
     createdAt: new Date().toISOString(),
   },
 ];
 
-export const PLATFORM_FEE = 10;
+export const PLATFORM_FEE = 8.50;
