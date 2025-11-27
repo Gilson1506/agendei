@@ -1,0 +1,93 @@
+Você agora é um engenheiro full-stack senior responsável por criar um SaaS completo e funcional de agendamento online para barbearias.  
+Crie todo o projeto 100% funcionando, incluindo backend, frontend e banco de dados.  
+O nome do sistema é **BRONKS BARBEARIA** e deve ter identidade visual **preto + roxo brilhante neon**.
+
+=====================================================================
+OBJETIVO
+=====================================================================
+Criar um sistema completo com:
+
+1. Página pública de agendamento:
+   - Listagem de serviços e combos.
+   - Cada serviço tem: nome, descrição, duração, preço.
+   - O cliente seleciona serviço, data e horário disponível.
+   - Valor total = preço do serviço + taxa fixa da plataforma (R$10).
+   - Pagamento via PIX (Gerar QR Code e esperar confirmação).
+   - Após pagamento confirmado, salvar agendamento no banco.
+
+2. Painel Admin (com login):
+   - Visualizar todos os agendamentos.
+   - Criar/editar/excluir serviços e combos.
+   - Controlar horários disponíveis (agenda).
+   - Ver pagamentos aprovados.
+   - Painel simples e funcional.
+
+3. Backend API:
+   - CRUD de serviços, combos e agendamentos.
+   - Integração PIX usando uma destas automaticamente:
+       * Mercado Pago
+       * Pagar.me
+       * Asaas
+     (Escolha a que funcionar melhor no Replit e configure.)
+   - Webhook para receber confirmação do pagamento.
+   - Proteção básica para rotas admin (JWT simples).
+
+4. Banco de Dados:
+   - Utilize SQLite ou PostgreSQL (Replit suporta ambos).
+   - Tabelas:
+        usuarios (admin)
+        servicos
+        combos
+        agendamentos
+        pagamentos
+
+5. Frontend:
+   - Pode ser React, Next.js ou HTML/CSS/JS simples.
+   - Tema escuro preto com roxo neon brilhante.
+   - Design moderno e bonito.
+   - Responsivo.
+
+6. Deploy:
+   - O projeto deve rodar automaticamente no Replit.
+   - Incluir "run" em package.json ou main.py dependendo da stack escolhida.
+
+=====================================================================
+REQUISITOS TÉCNICOS
+=====================================================================
+- Linguagens permitidas: Node.js com Express OU Python com FastAPI.  
+  (Escolha a que entregar mais rápido no Replit.)
+- Documentar no README como funciona o sistema.
+- Criar todos os arquivos necessários.
+- Criar seed inicial: um usuário admin.
+- Garantir que após eu clicar "Run" tudo funcione imediatamente.
+
+=====================================================================
+PRIORIDADE MÁXIMA:
+=====================================================================
+Quero o sistema **pronto para uso**, funcional, sem placeholders.  
+Inclua:
+- Tela real de agendamento
+- Tela real de pagamento PIX (QR Code + copiar código)
+- Painel admin real
+- API real
+- Integração PIX real
+- Layout estiloso preto/roxo neon
+- Código limpo e organizado
+
+=====================================================================
+ENTREGÁVEIS
+=====================================================================
+1. Código completo do backend
+2. Código completo do frontend
+3. Banco criado automaticamente
+4. Tela de agendamento funcional
+5. Integração PIX funcionando para pagamentos reais
+6. Dashboard admin
+7. Instruções no README
+8. Tudo rodando direto no Replit
+
+=====================================================================
+INSTRUÇÃO FINAL
+=====================================================================
+Agora gere TODO o código automaticamente, criando arquivos, pastas e estrutura completa sem pedir confirmação.  
+Seu output deve começar criando a estrutura do projeto e preenchendo cada arquivo.
