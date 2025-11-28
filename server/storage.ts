@@ -1,6 +1,7 @@
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import { neon } from '@neondatabase/serverless';
-import { eq, and } from 'drizzle-orm';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import session from "express-session";
+import connectPg from "connect-pg-simple";
+import memorystore from 'memorystore';
 import {
   type User,
   type InsertUser,
@@ -12,14 +13,12 @@ import {
   type InsertAppointment,
   type BarberService,
   type InsertBarberService,
-  users,
-  services,
-  barbers,
-  appointments,
-  barberServices,
 } from "@shared/schema";
 
+const PostgresSessionStore = connectPg(session);
+
 export interface IStorage {
+  sessionStore: session.Store;
   // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -40,9 +39,9 @@ export interface IStorage {
   deleteBarber(id: string): Promise<boolean>;
 
   // Barber-Service Associations
-  getBarberServices(barberId: string): Promise<string[]>; // Returns service IDs
+  getBarberServices(barberId: string): Promise<string[]>;
   setBarberServices(barberId: string, serviceIds: string[]): Promise<void>;
-  getBarbersForService(serviceId: string): Promise<string[]>; // Returns barber IDs
+  getBarbersForService(serviceId: string): Promise<string[]>;
 
   // Appointments
   getAllAppointments(): Promise<Appointment[]>;
@@ -51,164 +50,406 @@ export interface IStorage {
   createAppointment(appointment: InsertAppointment): Promise<Appointment>;
   updateAppointment(id: string, appointment: Partial<InsertAppointment>): Promise<Appointment | undefined>;
   deleteAppointment(id: string): Promise<boolean>;
+
+  // File Uploads
+  uploadBarberPhoto(barberId: string, file: Buffer, fileName: string, contentType: string): Promise<string>;
+  uploadPaymentReceipt(appointmentId: string, file: Buffer, fileName: string, contentType: string): Promise<string>;
+  uploadQRCode(serviceId: string, file: Buffer, fileName: string, contentType: string): Promise<string>;
+  getPublicUrl(bucket: string, path: string): string;
+  deleteFile(bucket: string, path: string): Promise<boolean>;
 }
 
-export class DBStorage implements IStorage {
-  private db;
+export class SupabaseStorage implements IStorage {
+  private supabase: SupabaseClient;
+  sessionStore: session.Store;
 
   constructor() {
-    const sql = neon(process.env.DATABASE_URL!);
-    this.db = drizzle({ client: sql });
+    const supabaseUrl = process.env.SUPABASE_URL!;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY!;
+
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment variables');
+    }
+
+    this.supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Use memory store for sessions (simpler for development)
+    // In production, you might want to use connect-pg-simple with DATABASE_URL
+    const MemoryStore = memorystore(session);
+    this.sessionStore = new MemoryStore({
+      checkPeriod: 86400000 // prune expired entries every 24h
+    });
   }
 
   // Users
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await this.db.select().from(users).where(eq(users.id, id));
-    return user;
+    const { data, error } = await this.supabase
+      .from('users')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      console.error('Error fetching user:', error);
+      return undefined;
+    }
+    return data as User;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await this.db.select().from(users).where(eq(users.username, username));
-    return user;
+    const { data, error } = await this.supabase
+      .from('users')
+      .select('*')
+      .eq('username', username)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return undefined; // Not found
+      console.error('Error fetching user by username:', error);
+      return undefined;
+    }
+    return data as User;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await this.db.insert(users).values(insertUser).returning();
-    return user;
+    const { data, error } = await this.supabase
+      .from('users')
+      .insert(insertUser)
+      .select()
+      .single();
+
+    if (error) throw new Error(`Error creating user: ${error.message}`);
+    return data as User;
   }
 
   // Services
   async getAllServices(): Promise<Service[]> {
-    return await this.db.select().from(services);
+    const { data, error } = await this.supabase
+      .from('services')
+      .select('*');
+
+    if (error) throw new Error(`Error fetching services: ${error.message}`);
+    return data as Service[];
   }
 
   async getService(id: string): Promise<Service | undefined> {
-    const [service] = await this.db.select().from(services).where(eq(services.id, id));
-    return service;
+    const { data, error } = await this.supabase
+      .from('services')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return undefined;
+      throw new Error(`Error fetching service: ${error.message}`);
+    }
+    return data as Service;
   }
 
   async createService(service: InsertService): Promise<Service> {
-    const [newService] = await this.db.insert(services).values(service).returning();
-    return newService;
+    const { data, error } = await this.supabase
+      .from('services')
+      .insert(service)
+      .select()
+      .single();
+
+    if (error) throw new Error(`Error creating service: ${error.message}`);
+    return data as Service;
   }
 
   async updateService(id: string, service: Partial<InsertService>): Promise<Service | undefined> {
-    const [updated] = await this.db
-      .update(services)
-      .set(service)
-      .where(eq(services.id, id))
-      .returning();
-    return updated;
+    const { data, error } = await this.supabase
+      .from('services')
+      .update(service)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return undefined;
+      throw new Error(`Error updating service: ${error.message}`);
+    }
+    return data as Service;
   }
 
   async deleteService(id: string): Promise<boolean> {
-    const result = await this.db.delete(services).where(eq(services.id, id));
-    return result.rowCount ? result.rowCount > 0 : false;
+    const { error } = await this.supabase
+      .from('services')
+      .delete()
+      .eq('id', id);
+
+    return !error;
   }
 
   // Barbers
   async getAllBarbers(): Promise<Barber[]> {
-    return await this.db.select().from(barbers);
+    const { data, error } = await this.supabase
+      .from('barbers')
+      .select('*');
+
+    if (error) throw new Error(`Error fetching barbers: ${error.message}`);
+    return data as Barber[];
   }
 
   async getBarber(id: string): Promise<Barber | undefined> {
-    const [barber] = await this.db.select().from(barbers).where(eq(barbers.id, id));
-    return barber;
+    const { data, error } = await this.supabase
+      .from('barbers')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return undefined;
+      throw new Error(`Error fetching barber: ${error.message}`);
+    }
+    return data as Barber;
   }
 
   async createBarber(barber: InsertBarber): Promise<Barber> {
-    const [newBarber] = await this.db.insert(barbers).values(barber).returning();
-    return newBarber;
+    const { data, error } = await this.supabase
+      .from('barbers')
+      .insert(barber)
+      .select()
+      .single();
+
+    if (error) throw new Error(`Error creating barber: ${error.message}`);
+    // Return with serviceIds as empty array since they're stored em uma tabela separada
+    return { ...data, serviceIds: [] } as Barber;
   }
 
   async updateBarber(id: string, barber: Partial<InsertBarber>): Promise<Barber | undefined> {
-    const [updated] = await this.db
-      .update(barbers)
-      .set(barber)
-      .where(eq(barbers.id, id))
-      .returning();
-    return updated;
+    const { data, error } = await this.supabase
+      .from('barbers')
+      .update(barber)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return undefined;
+      throw new Error(`Error updating barber: ${error.message}`);
+    }
+    return data as Barber;
   }
 
   async deleteBarber(id: string): Promise<boolean> {
-    const result = await this.db.delete(barbers).where(eq(barbers.id, id));
-    return result.rowCount ? result.rowCount > 0 : false;
+    const { error } = await this.supabase
+      .from('barbers')
+      .delete()
+      .eq('id', id);
+
+    return !error;
   }
 
   // Barber-Service Associations
   async getBarberServices(barberId: string): Promise<string[]> {
-    const results = await this.db
-      .select({ serviceId: barberServices.serviceId })
-      .from(barberServices)
-      .where(eq(barberServices.barberId, barberId));
-    return results.map(r => r.serviceId);
+    const { data, error } = await this.supabase
+      .from('barber_services')
+      .select('service_id')
+      .eq('barber_id', barberId);
+
+    if (error) throw new Error(`Error fetching barber services: ${error.message}`);
+    return data.map(r => r.service_id);
   }
 
   async setBarberServices(barberId: string, serviceIds: string[]): Promise<void> {
     // Delete existing associations
-    await this.db.delete(barberServices).where(eq(barberServices.barberId, barberId));
-    
+    await this.supabase
+      .from('barber_services')
+      .delete()
+      .eq('barber_id', barberId);
+
     // Insert new associations
     if (serviceIds.length > 0) {
-      await this.db.insert(barberServices).values(
-        serviceIds.map(serviceId => ({ barberId, serviceId }))
-      );
+      const { error } = await this.supabase
+        .from('barber_services')
+        .insert(serviceIds.map(serviceId => ({ barber_id: barberId, service_id: serviceId })));
+
+      if (error) throw new Error(`Error setting barber services: ${error.message}`);
     }
   }
 
   async getBarbersForService(serviceId: string): Promise<string[]> {
-    const results = await this.db
-      .select({ barberId: barberServices.barberId })
-      .from(barberServices)
-      .where(eq(barberServices.serviceId, serviceId));
-    return results.map(r => r.barberId);
+    const { data, error } = await this.supabase
+      .from('barber_services')
+      .select('barber_id')
+      .eq('service_id', serviceId);
+
+    if (error) throw new Error(`Error fetching barbers for service: ${error.message}`);
+    return data.map(r => r.barber_id);
   }
 
   // Appointments
   async getAllAppointments(): Promise<Appointment[]> {
-    return await this.db.select().from(appointments);
+    const { data, error } = await this.supabase
+      .from('appointments')
+      .select('*');
+
+    if (error) throw new Error(`Error fetching appointments: ${error.message}`);
+    return data as Appointment[];
   }
 
   async getAppointment(id: string): Promise<Appointment | undefined> {
-    const [appointment] = await this.db.select().from(appointments).where(eq(appointments.id, id));
-    return appointment;
+    const { data, error } = await this.supabase
+      .from('appointments')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return undefined;
+      throw new Error(`Error fetching appointment: ${error.message}`);
+    }
+    return data as Appointment;
   }
 
   async getAppointmentsByBarber(barberId: string, date?: Date): Promise<Appointment[]> {
-    let query = this.db.select().from(appointments).where(eq(appointments.barberId, barberId));
-    
-    // If date is provided, filter by date (same day)
-    if (date) {
-      const startOfDay = new Date(date);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(date);
-      endOfDay.setHours(23, 59, 59, 999);
-      
-      // Note: We'll handle date filtering in the application layer for simplicity
-      // since Drizzle ORM date filtering can be complex
-    }
-    
-    return await query;
+    let query = this.supabase
+      .from('appointments')
+      .select('*')
+      .eq('barber_id', barberId);
+
+    // Note: Date filtering would need to be implemented based on your schema
+    // This is a simplified version
+
+    const { data, error } = await query;
+
+    if (error) throw new Error(`Error fetching appointments by barber: ${error.message}`);
+    return data as Appointment[];
   }
 
   async createAppointment(appointment: InsertAppointment): Promise<Appointment> {
-    const [newAppointment] = await this.db.insert(appointments).values(appointment).returning();
-    return newAppointment;
+    // Converter de camelCase para snake_case para o Supabase
+    const supabaseData = {
+      service_id: appointment.serviceId,
+      barber_id: appointment.barberId,
+      date: appointment.date,
+      customer_name: appointment.customerName,
+      customer_phone: appointment.customerPhone,
+      status: appointment.status,
+      total_price: appointment.totalPrice,
+      payment_receipt_url: appointment.paymentReceiptUrl,
+    };
+
+    const { data, error } = await this.supabase
+      .from('appointments')
+      .insert(supabaseData)
+      .select()
+      .single();
+
+    if (error) throw new Error(`Error creating appointment: ${error.message}`);
+    return data as Appointment;
   }
 
   async updateAppointment(id: string, appointment: Partial<InsertAppointment>): Promise<Appointment | undefined> {
-    const [updated] = await this.db
-      .update(appointments)
-      .set(appointment)
-      .where(eq(appointments.id, id))
-      .returning();
-    return updated;
+    // Converter de camelCase para snake_case para o Supabase
+    const supabaseData: any = {};
+    if (appointment.serviceId) supabaseData.service_id = appointment.serviceId;
+    if (appointment.barberId) supabaseData.barber_id = appointment.barberId;
+    if (appointment.date) supabaseData.date = appointment.date;
+    if (appointment.customerName) supabaseData.customer_name = appointment.customerName;
+    if (appointment.customerPhone) supabaseData.customer_phone = appointment.customerPhone;
+    if (appointment.status) supabaseData.status = appointment.status;
+    if (appointment.totalPrice) supabaseData.total_price = appointment.totalPrice;
+    if (appointment.paymentReceiptUrl) supabaseData.payment_receipt_url = appointment.paymentReceiptUrl;
+
+    const { data, error } = await this.supabase
+      .from('appointments')
+      .update(supabaseData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return undefined;
+      throw new Error(`Error updating appointment: ${error.message}`);
+    }
+    return data as Appointment;
   }
 
   async deleteAppointment(id: string): Promise<boolean> {
-    const result = await this.db.delete(appointments).where(eq(appointments.id, id));
-    return result.rowCount ? result.rowCount > 0 : false;
+    const { error } = await this.supabase
+      .from('appointments')
+      .delete()
+      .eq('id', id);
+
+    return !error;
+  }
+
+
+  // File Uploads
+  private sanitizeFileName(fileName: string): string {
+    // Remove espaços, acentos e caracteres especiais
+    return fileName
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+      .replace(/[^a-zA-Z0-9.-]/g, '_') // Substitui caracteres especiais por _
+      .toLowerCase();
+  }
+
+  async uploadBarberPhoto(barberId: string, file: Buffer, fileName: string, contentType: string): Promise<string> {
+    const sanitizedName = this.sanitizeFileName(fileName);
+    const filePath = `barbers/${barberId}/${Date.now()}-${sanitizedName}`;
+
+    const { data, error } = await this.supabase.storage
+      .from('uploads')
+      .upload(filePath, file, {
+        contentType,
+        upsert: false
+      });
+
+    if (error) throw new Error(`Error uploading barber photo: ${error.message}`);
+
+    return this.getPublicUrl('uploads', filePath);
+  }
+
+  async uploadPaymentReceipt(appointmentId: string, file: Buffer, fileName: string, contentType: string): Promise<string> {
+    const sanitizedName = this.sanitizeFileName(fileName);
+    const filePath = `receipts/${appointmentId}/${Date.now()}-${sanitizedName}`;
+
+    const { data, error } = await this.supabase.storage
+      .from('uploads')
+      .upload(filePath, file, {
+        contentType,
+        upsert: false
+      });
+
+    if (error) throw new Error(`Error uploading payment receipt: ${error.message}`);
+
+    return this.getPublicUrl('uploads', filePath);
+  }
+
+  async uploadQRCode(serviceId: string, file: Buffer, fileName: string, contentType: string): Promise<string> {
+    const sanitizedName = this.sanitizeFileName(fileName);
+    const filePath = `qrcodes/${serviceId}/${Date.now()}-${sanitizedName}`;
+
+    const { data, error } = await this.supabase.storage
+      .from('uploads')
+      .upload(filePath, file, {
+        contentType,
+        upsert: false
+      });
+
+    if (error) throw new Error(`Error uploading QR code: ${error.message}`);
+
+    return this.getPublicUrl('uploads', filePath);
+  }
+
+  getPublicUrl(bucket: string, path: string): string {
+    const { data } = this.supabase.storage
+      .from(bucket)
+      .getPublicUrl(path);
+
+    return data.publicUrl;
+  }
+
+  async deleteFile(bucket: string, path: string): Promise<boolean> {
+    const { error } = await this.supabase.storage
+      .from(bucket)
+      .remove([path]);
+
+    return !error;
   }
 }
 
-export const storage = new DBStorage();
+export const storage = new SupabaseStorage();

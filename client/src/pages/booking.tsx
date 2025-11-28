@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useData } from "@/context/DataContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
@@ -14,14 +13,20 @@ import { QRCodeSVG } from "qrcode.react";
 import { format, addDays, isSameDay, setHours, setMinutes, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Link } from "wouter";
+import { useServices, useBarbers, useAppointments, useCreateAppointment, useStats, uploadPaymentReceipt } from "@/hooks/use-api";
 
 const TIME_SLOTS = [
   "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00", "18:30", "19:00", "19:30", "20:00"
 ];
 
 export default function BookingPage() {
-  const { services, barbers, appointments, addAppointment, platformFee } = useData();
-  
+  // Fetch data from API
+  const { data: services = [], isLoading: servicesLoading } = useServices();
+  const { data: barbers = [], isLoading: barbersLoading } = useBarbers();
+  const { data: appointments = [], isLoading: appointmentsLoading } = useAppointments();
+  const { data: stats } = useStats();
+  const createAppointment = useCreateAppointment();
+
   const [step, setStep] = useState(1);
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [selectedBarber, setSelectedBarber] = useState<string | null>(null);
@@ -31,16 +36,19 @@ export default function BookingPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
   const { toast } = useToast();
 
   const service = services.find(s => s.id === selectedService);
   const barber = barbers.find(b => b.id === selectedBarber);
-  
+
   // Calculate total with the dynamic platform fee
+  const platformFee = stats?.platformFee || 5.00;
   const total = service ? service.price + platformFee : 0;
 
   // Filter barbers based on selected service
-  const availableBarbers = selectedService 
+  const availableBarbers = selectedService
     ? barbers.filter(b => b.serviceIds.includes(selectedService))
     : [];
 
@@ -52,19 +60,32 @@ export default function BookingPage() {
         setSelectedBarber(null);
       }
     }
-  }, [selectedService, barbers]);
+  }, [selectedService, barbers, selectedBarber]);
+
+  // Show loading state
+  if (servicesLoading || barbersLoading || appointmentsLoading) {
+    return (
+      <div className="container mx-auto py-8 px-4 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Carregando dados...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Helper to check if a time slot is occupied
   const isTimeSlotOccupied = (time: string) => {
     if (!date || !selectedBarber) return false;
-    
+
     return appointments.some(apt => {
       // Only check appointments for the selected barber
-      if (apt.barberId !== selectedBarber) return false;
+      if (apt.barber_id !== selectedBarber) return false;
       if (apt.status === 'cancelled') return false;
+      if (!apt.date) return false;
 
       const aptDate = parseISO(apt.date);
-      
+
       // Check if it's the same day
       if (!isSameDay(aptDate, date)) return false;
 
@@ -100,45 +121,82 @@ export default function BookingPage() {
 
   const handlePayment = () => {
     setIsProcessingPayment(true);
-    // Simulate PIX check loop
-    setTimeout(() => {
-      setIsProcessingPayment(false);
-      setPaymentConfirmed(true);
-      
-      // Add to store
-      if (service && barber && date && selectedTime) {
-        // Create date object with time
-        const [hours, minutes] = selectedTime.split(':').map(Number);
-        const aptDate = setMinutes(setHours(date, hours), minutes);
 
-        addAppointment({
-          serviceId: service.id,
-          barberId: barber.id,
-          date: aptDate.toISOString(),
-          customerName,
-          customerPhone,
-          status: "confirmed",
-          totalPrice: total
+    if (!service || !barber || !date || !selectedTime) {
+      toast({
+        title: "Erro",
+        description: "Dados incompletos.",
+        variant: "destructive"
+      });
+      setIsProcessingPayment(false);
+      return;
+    }
+
+    // Create date object with time
+    const [hours, minutes] = selectedTime.split(':').map(Number);
+    const aptDate = setMinutes(setHours(date, hours), minutes);
+
+    const appointmentData: any = {
+      service_id: service.id,
+      barber_id: barber.id,
+      date: aptDate.toISOString(),
+      customer_name: customerName,
+      customer_phone: customerPhone,
+      status: receiptFile ? "pending" : "confirmed", // If receipt uploaded, wait for confirmation
+      total_price: total
+    };
+
+    // Create appointment
+    createAppointment.mutate(appointmentData, {
+      onSuccess: async (appointment) => {
+        // Upload receipt if provided
+        if (receiptFile && appointment?.id) {
+          setIsUploadingReceipt(true);
+          try {
+            const receiptUrl = await uploadPaymentReceipt(appointment.id, receiptFile);
+            // Update appointment with receipt URL
+            await fetch(`/api/appointments/${appointment.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ payment_receipt_url: receiptUrl })
+            });
+          } catch (error) {
+            console.error('Error uploading receipt:', error);
+            toast({
+              title: "Aviso",
+              description: "Agendamento criado, mas falha ao enviar comprovante. Entre em contato.",
+              variant: "destructive"
+            });
+          } finally {
+            setIsUploadingReceipt(false);
+          }
+        }
+
+        setPaymentConfirmed(true);
+        setIsProcessingPayment(false);
+        toast({
+          title: receiptFile ? "Agendamento Criado!" : "Pagamento Confirmado!",
+          description: receiptFile
+            ? "Seu agendamento foi criado. Aguarde a confirmação do pagamento."
+            : "Seu agendamento foi realizado com sucesso.",
+          className: "bg-green-600 text-white border-none"
+        });
+      },
+      onError: () => {
+        setIsProcessingPayment(false);
+        toast({
+          title: "Erro ao criar agendamento",
+          description: "Tente novamente.",
+          variant: "destructive"
         });
       }
-
-      toast({ 
-        title: "Pagamento Confirmado!", 
-        description: "Seu agendamento foi realizado com sucesso.",
-        className: "bg-green-600 text-white border-none"
-      });
-    }, 3000);
-  };
-
-  const copyPixCode = () => {
-    navigator.clipboard.writeText("00020126580014br.gov.bcb.pix0136123e4567-e89b-12d3-a456-426614174000520400005303986540510.005802BR5913Bronks Barbearia6008Sao Paulo62070503***6304ABCD");
-    toast({ title: "Código PIX copiado!", description: "Cole no app do seu banco." });
+    });
   };
 
   if (paymentConfirmed) {
     return (
       <div className="container max-w-md mx-auto py-20 px-4 text-center">
-        <motion.div 
+        <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           className="bg-card border border-green-500/30 p-8 rounded-3xl flex flex-col items-center gap-6 shadow-[0_0_50px_rgba(34,197,94,0.2)]"
@@ -150,7 +208,7 @@ export default function BookingPage() {
             <h2 className="font-heading text-3xl font-bold text-white mb-2">AGENDADO!</h2>
             <p className="text-muted-foreground">Te esperamos na data marcada.</p>
           </div>
-          
+
           <div className="w-full bg-muted/50 p-4 rounded-xl text-left text-sm space-y-2">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Serviço:</span>
@@ -194,8 +252,8 @@ export default function BookingPage() {
           <span className={step >= 5 ? "text-primary font-bold" : ""}>5. Pagamento</span>
         </div>
         <div className="h-1 w-full bg-muted mt-4 rounded-full overflow-hidden">
-          <motion.div 
-            className="h-full bg-primary" 
+          <motion.div
+            className="h-full bg-primary"
             initial={{ width: 0 }}
             animate={{ width: `${(step / 5) * 100}%` }}
           />
@@ -204,7 +262,7 @@ export default function BookingPage() {
 
       <AnimatePresence mode="wait">
         {step === 1 && (
-          <motion.div 
+          <motion.div
             key="step1"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -212,14 +270,13 @@ export default function BookingPage() {
             className="grid grid-cols-1 md:grid-cols-2 gap-4"
           >
             {services.map((s) => (
-              <div 
+              <div
                 key={s.id}
                 onClick={() => setSelectedService(s.id)}
-                className={`cursor-pointer p-6 rounded-xl border-2 transition-all ${
-                  selectedService === s.id 
-                    ? "border-primary bg-primary/5 shadow-[0_0_20px_rgba(168,85,247,0.2)]" 
-                    : "border-border bg-card hover:border-primary/50"
-                }`}
+                className={`cursor-pointer p-6 rounded-xl border-2 transition-all ${selectedService === s.id
+                  ? "border-primary bg-primary/5 shadow-[0_0_20px_rgba(168,85,247,0.2)]"
+                  : "border-border bg-card hover:border-primary/50"
+                  }`}
               >
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="font-heading text-xl font-bold">{s.name}</h3>
@@ -236,7 +293,7 @@ export default function BookingPage() {
         )}
 
         {step === 2 && (
-          <motion.div 
+          <motion.div
             key="step2"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -244,26 +301,29 @@ export default function BookingPage() {
           >
             {availableBarbers.length === 0 ? (
               <div className="text-center py-10">
-                 <p className="text-muted-foreground">Nenhum profissional disponível para este serviço no momento.</p>
+                <p className="text-muted-foreground">Nenhum profissional disponível para este serviço no momento.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {availableBarbers.map((b) => (
-                  <div 
+                  <div
                     key={b.id}
                     onClick={() => setSelectedBarber(b.id)}
-                    className={`cursor-pointer p-6 rounded-xl border-2 flex flex-col items-center gap-4 transition-all ${
-                      selectedBarber === b.id 
-                        ? "border-primary bg-primary/5 scale-105" 
-                        : "border-border bg-card hover:border-primary/50"
-                    }`}
+                    className={`cursor-pointer p-6 rounded-xl border-2 flex flex-col items-center gap-4 transition-all ${selectedBarber === b.id
+                      ? "border-primary bg-primary/5 scale-105"
+                      : "border-border bg-card hover:border-primary/50"
+                      }`}
                   >
                     <div className="h-24 w-24 rounded-full overflow-hidden bg-muted border-2 border-border">
-                      <img src={b.avatar} alt={b.name} className="w-full h-full object-cover" />
+                      <img
+                        src={(b as any).profile_photo_url || b.avatar}
+                        alt={b.name}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                     <div className="text-center">
                       <h3 className="font-heading font-bold">{b.name}</h3>
-                      <p className="text-xs text-muted-foreground">Barbeiro Senior</p>
+                      <p className="text-xs text-muted-foreground">Barbeiro Profissional</p>
                     </div>
                   </div>
                 ))}
@@ -273,7 +333,7 @@ export default function BookingPage() {
         )}
 
         {step === 3 && (
-          <motion.div 
+          <motion.div
             key="step3"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -290,7 +350,7 @@ export default function BookingPage() {
                 disabled={(date) => date < new Date()}
               />
             </div>
-            
+
             <div className="flex-1">
               <h3 className="font-heading text-lg font-bold mb-4">Horários Disponíveis</h3>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
@@ -302,15 +362,19 @@ export default function BookingPage() {
                       variant={selectedTime === time ? "default" : "outline"}
                       onClick={() => !isOccupied && setSelectedTime(time)}
                       disabled={isOccupied}
-                      className={`w-full ${
-                        selectedTime === time 
-                          ? "bg-primary text-white hover:bg-primary/90" 
-                          : isOccupied 
-                            ? "opacity-50 cursor-not-allowed bg-muted text-muted-foreground hover:bg-muted hover:text-muted-foreground border-border"
-                            : "hover:border-primary"
-                      }`}
+                      className={`w-full relative ${selectedTime === time
+                        ? "bg-primary text-white hover:bg-primary/90"
+                        : isOccupied
+                          ? "opacity-100 cursor-not-allowed bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30"
+                          : "hover:border-primary"
+                        }`}
                     >
-                      {time}
+                      <div className="flex flex-col items-center">
+                        <span className="font-bold">{time}</span>
+                        {isOccupied && (
+                          <span className="text-[10px] font-normal mt-0.5">Ocupado</span>
+                        )}
+                      </div>
                     </Button>
                   );
                 })}
@@ -328,7 +392,7 @@ export default function BookingPage() {
         )}
 
         {step === 4 && (
-          <motion.div 
+          <motion.div
             key="step4"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -337,20 +401,20 @@ export default function BookingPage() {
           >
             <div className="space-y-2">
               <Label htmlFor="name">Nome Completo</Label>
-              <Input 
-                id="name" 
-                placeholder="Seu nome" 
-                value={customerName} 
+              <Input
+                id="name"
+                placeholder="Seu nome"
+                value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 className="bg-card border-border h-12"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="phone">Telefone / WhatsApp</Label>
-              <Input 
-                id="phone" 
-                placeholder="(11) 99999-9999" 
-                value={customerPhone} 
+              <Input
+                id="phone"
+                placeholder="(11) 99999-9999"
+                value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
                 className="bg-card border-border h-12"
               />
@@ -378,45 +442,98 @@ export default function BookingPage() {
         )}
 
         {step === 5 && (
-          <motion.div 
+          <motion.div
             key="step5"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
             className="max-w-md mx-auto text-center"
           >
+            {/* QR Code - usar do serviço se disponível */}
             <div className="bg-white p-8 rounded-2xl w-fit mx-auto mb-6 shadow-[0_0_40px_rgba(255,255,255,0.1)]">
-              <QRCodeSVG value="00020126580014br.gov.bcb.pix0136123e4567-e89b-12d3-a456-426614174000520400005303986540510.005802BR5913Bronks Barbearia6008Sao Paulo62070503***6304ABCD" size={200} />
+              {service?.qr_code_url ? (
+                <img
+                  src={service.qr_code_url}
+                  alt="QR Code PIX"
+                  className="w-[200px] h-[200px] object-contain"
+                />
+              ) : (
+                <QRCodeSVG
+                  value={service?.pix_link || "00020126580014br.gov.bcb.pix0136123e4567-e89b-12d3-a456-426614174000520400005303986540510.005802BR5913Bronks Barbearia6008Sao Paulo62070503***6304ABCD"}
+                  size={200}
+                />
+              )}
             </div>
-            
+
             <p className="text-muted-foreground mb-2">Escaneie o QR Code para pagar</p>
             <div className="text-3xl font-bold text-white mb-6 font-mono">R$ {total.toFixed(2)}</div>
 
-            <div className="flex items-center gap-2 bg-card border border-border p-3 rounded-lg mb-8">
-              <div className="flex-1 font-mono text-xs text-muted-foreground truncate">
-                00020126580014br.gov.bcb.pix0136123e4567...
+            {/* Link PIX - usar do serviço se disponível */}
+            {(service?.pix_link || service?.qr_code_url) && (
+              <div className="flex items-center gap-2 bg-card border border-border p-3 rounded-lg mb-8">
+                <div className="flex-1 font-mono text-xs text-muted-foreground truncate">
+                  {service?.pix_link ? (
+                    service.pix_link.substring(0, 40) + '...'
+                  ) : (
+                    '00020126580014br.gov.bcb.pix0136123e4567...'
+                  )}
+                </div>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => {
+                    const pixCode = service?.pix_link || "00020126580014br.gov.bcb.pix0136123e4567-e89b-12d3-a456-426614174000520400005303986540510.005802BR5913Bronks Barbearia6008Sao Paulo62070503***6304ABCD";
+                    navigator.clipboard.writeText(pixCode);
+                    toast({ title: "Código PIX copiado!", description: "Cole no app do seu banco." });
+                  }}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
               </div>
-              <Button size="icon" variant="ghost" onClick={copyPixCode}>
-                <Copy className="h-4 w-4" />
-              </Button>
+            )}
+
+            <div className="space-y-4 mb-6">
+              <div className="space-y-2">
+                <Label htmlFor="receipt" className="text-sm font-medium">Enviar Comprovante (Opcional)</Label>
+                <Input
+                  id="receipt"
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                  className="bg-card border-border"
+                />
+                {receiptFile && (
+                  <p className="text-xs text-muted-foreground">
+                    Arquivo selecionado: {receiptFile.name}
+                  </p>
+                )}
+              </div>
             </div>
 
-            <Button 
-              size="lg" 
+            <Button
+              size="lg"
               className="w-full font-bold bg-primary hover:bg-primary/90 h-14 text-lg rounded-full relative overflow-hidden"
               onClick={handlePayment}
-              disabled={isProcessingPayment}
+              disabled={isProcessingPayment || isUploadingReceipt}
             >
-              {isProcessingPayment && (
+              {(isProcessingPayment || isUploadingReceipt) && (
                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
                   <Loader2 className="h-6 w-6 animate-spin text-white" />
                 </div>
               )}
-              {isProcessingPayment ? "CONFIRMANDO..." : "JÁ REALIZEI O PAGAMENTO"}
+              {isUploadingReceipt
+                ? "ENVIANDO COMPROVANTE..."
+                : isProcessingPayment
+                  ? "CONFIRMANDO..."
+                  : receiptFile
+                    ? "ENVIAR COMPROVANTE E CONFIRMAR"
+                    : "JÁ REALIZEI O PAGAMENTO"}
             </Button>
-            
+
             <p className="text-xs text-muted-foreground mt-4">
-              O sistema irá reconhecer seu pagamento automaticamente.
+              {receiptFile
+                ? "Seu agendamento será confirmado após análise do comprovante."
+                : "O sistema irá reconhecer seu pagamento automaticamente."}
             </p>
           </motion.div>
         )}
@@ -425,15 +542,15 @@ export default function BookingPage() {
       {/* Navigation Buttons */}
       {!paymentConfirmed && step < 5 && (
         <div className="mt-12 flex justify-between">
-          <Button 
-            variant="outline" 
-            onClick={handleBack} 
+          <Button
+            variant="outline"
+            onClick={handleBack}
             disabled={step === 1}
             className="w-32"
           >
             <ChevronLeft className="mr-2 h-4 w-4" /> Voltar
           </Button>
-          <Button 
+          <Button
             onClick={handleNext}
             className="w-32 bg-primary hover:bg-primary/90 text-white font-bold"
           >

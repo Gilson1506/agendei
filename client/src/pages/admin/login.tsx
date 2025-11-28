@@ -13,20 +13,37 @@ export default function AdminLogin() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Fake auth delay
-    setTimeout(() => {
-      setIsLoading(false);
-      if (email === "bronks@" && password === "bronks@1") {
-        toast({ title: "Bem-vindo, Chefe!", description: "Login realizado com sucesso." });
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: email, password }),
+      });
+
+      if (res.ok) {
+        toast({ title: "Bem-vindo!", description: "Login realizado com sucesso." });
         setLocation("/admin/dashboard");
       } else {
-        toast({ title: "Erro", description: "Credenciais inválidas.", variant: "destructive" });
+        const data = await res.json();
+        toast({
+          title: "Erro no login",
+          description: data.message || "Credenciais inválidas.",
+          variant: "destructive"
+        });
       }
-    }, 1000);
+    } catch (error) {
+      toast({
+        title: "Erro de conexão",
+        description: "Não foi possível conectar ao servidor.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -46,9 +63,9 @@ export default function AdminLogin() {
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Login</label>
-              <Input 
+              <Input
                 type="text"
-                value={email} 
+                value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="bg-black/50 border-primary/20 focus:border-primary h-12"
                 placeholder="Digite seu login"
@@ -57,9 +74,9 @@ export default function AdminLogin() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Senha</label>
               <div className="relative">
-                <Input 
-                  type="password" 
-                  value={password} 
+                <Input
+                  type="password"
+                  value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="bg-black/50 border-primary/20 focus:border-primary h-12 pl-10"
                   placeholder="Digite sua senha"
@@ -67,7 +84,7 @@ export default function AdminLogin() {
                 <Lock className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground" />
               </div>
             </div>
-            
+
             <Button type="submit" className="w-full h-12 font-bold bg-primary hover:bg-primary/90 text-white mt-4" disabled={isLoading}>
               {isLoading ? "ENTRANDO..." : "ACESSAR PAINEL"}
             </Button>

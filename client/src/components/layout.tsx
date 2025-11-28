@@ -12,54 +12,42 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const navItems = isAdmin
     ? [
-        { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-        { href: "/admin/schedule", label: "Agenda", icon: Calendar },
-        { href: "/admin/services", label: "Serviços", icon: Scissors },
-      ]
+      { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/admin/schedule", label: "Agenda", icon: Calendar },
+      { href: "/admin/services", label: "Serviços", icon: Scissors },
+    ]
     : [
-        { href: "/", label: "Início", icon: Scissors },
-        { href: "/booking", label: "Agendar", icon: Calendar },
-      ];
+      { href: "/", label: "Início", icon: Scissors },
+      { href: "/booking", label: "Agendar", icon: Calendar },
+    ];
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary selection:text-primary-foreground">
       {/* Navbar */}
       <nav className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link href="/">
-            <a className="flex items-center gap-2 font-heading font-bold text-xl tracking-wider hover:text-primary transition-colors">
-              <Scissors className="h-6 w-6 text-primary animate-pulse" />
-              <span className="text-neon">BRONKS</span>
-            </a>
+          <Link href="/" className="flex items-center gap-2 font-heading font-bold text-xl tracking-wider hover:text-primary transition-colors">
+            <Scissors className="h-6 w-6 text-primary animate-pulse" />
+            <span className="text-neon">BRONKS</span>
           </Link>
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-6">
             {navItems.map((item) => (
-              <Link key={item.href} href={item.href}>
-                <a
-                  className={`flex items-center gap-2 text-sm font-medium transition-colors hover:text-primary ${
-                    location === item.href ? "text-primary" : "text-muted-foreground"
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-2 text-sm font-medium transition-colors hover:text-primary ${location === item.href ? "text-primary" : "text-muted-foreground"
                   }`}
-                >
-                  <item.icon className="h-4 w-4" />
-                  {item.label}
-                </a>
+              >
+                <item.icon className="h-4 w-4" />
+                {item.label}
               </Link>
             ))}
-            {!isAdmin && (
-              <Link href="/admin/login">
-                <a className="text-xs text-muted-foreground hover:text-white transition-colors flex items-center gap-1">
-                  <LogIn className="h-3 w-3" />
-                  Admin Area
-                </a>
-              </Link>
-            )}
+
             {isAdmin && (
-              <Link href="/">
-                <a className="text-xs text-muted-foreground hover:text-white transition-colors">
-                  Sair
-                </a>
+              <Link href="/" className="text-xs text-muted-foreground hover:text-white transition-colors">
+                Sair
               </Link>
             )}
           </div>
@@ -75,25 +63,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <SheetContent side="right" className="border-l-primary/20 bg-background/95 backdrop-blur-xl">
                 <div className="flex flex-col gap-8 mt-8">
                   {navItems.map((item) => (
-                    <Link key={item.href} href={item.href}>
-                      <a
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className={`flex items-center gap-4 text-lg font-medium transition-colors hover:text-primary ${
-                          location === item.href ? "text-primary" : "text-muted-foreground"
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={`flex items-center gap-4 text-lg font-medium transition-colors hover:text-primary ${location === item.href ? "text-primary" : "text-muted-foreground"
                         }`}
-                      >
-                        <item.icon className="h-5 w-5" />
-                        {item.label}
-                      </a>
+                    >
+                      <item.icon className="h-5 w-5" />
+                      {item.label}
                     </Link>
                   ))}
-                  {!isAdmin && (
-                     <Link href="/admin/login">
-                      <a onClick={() => setIsMobileMenuOpen(false)} className="mt-4 text-sm text-muted-foreground hover:text-primary">
-                        Acesso Admin
-                      </a>
-                    </Link>
-                  )}
+
                 </div>
               </SheetContent>
             </Sheet>

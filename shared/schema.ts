@@ -25,10 +25,15 @@ export const services = pgTable("services", {
   description: text("description").notNull(),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   duration: integer("duration").notNull(), // in minutes
+  pixLink: text("pix_link"), // Link PIX para pagamento
+  qrCodeUrl: text("qr_code_url"), // URL do QR Code PIX
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertServiceSchema = createInsertSchema(services).omit({
+
+export const insertServiceSchema = createInsertSchema(services, {
+  price: z.coerce.string(),
+}).omit({
   id: true,
   createdAt: true,
 });
@@ -41,6 +46,7 @@ export const barbers = pgTable("barbers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   avatar: text("avatar").notNull(),
+  profilePhotoUrl: text("profile_photo_url"), // URL da foto de perfil no Supabase Storage
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -76,13 +82,31 @@ export const appointments = pgTable("appointments", {
   customerPhone: text("customer_phone").notNull(),
   status: text("status").notNull().default("pending"), // pending, confirmed, completed, cancelled
   totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull(),
+  paymentReceiptUrl: text("payment_receipt_url"), // URL do comprovante de pagamento no Supabase Storage
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertAppointmentSchema = createInsertSchema(appointments).omit({
-  id: true,
-  createdAt: true,
-});
+// Schema customizado para aceitar dados do frontend (snake_case)
+export const insertAppointmentSchema = z.object({
+  service_id: z.string(),
+  barber_id: z.string(),
+  date: z.string().transform(str => new Date(str)),
+  customer_name: z.string(),
+  customer_phone: z.string(),
+  status: z.string().default('pending'),
+  total_price: z.union([z.string(), z.number()]).transform(val => String(val)),
+  payment_receipt_url: z.string().optional(),
+}).transform((data) => ({
+  serviceId: data.service_id,
+  barberId: data.barber_id,
+  date: data.date,
+  customerName: data.customer_name,
+  customerPhone: data.customer_phone,
+  status: data.status,
+  totalPrice: data.total_price,
+  paymentReceiptUrl: data.payment_receipt_url,
+}));
 
 export type InsertAppointment = z.infer<typeof insertAppointmentSchema>;
 export type Appointment = typeof appointments.$inferSelect;
+

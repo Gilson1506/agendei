@@ -3,10 +3,21 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Calendar, Scissors, Clock, Star } from "lucide-react";
 import interiorImage from "@assets/generated_images/dark_neon_barbershop_interior.png";
-import { useData } from "@/context/DataContext";
+import { useServices } from "@/hooks/use-api";
 
 export default function Home() {
-  const { services } = useData();
+  const { data: services = [], isLoading } = useServices();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -14,9 +25,9 @@ export default function Home() {
       <section className="relative h-[80vh] flex items-center justify-center overflow-hidden">
         {/* Background Image with Overlay */}
         <div className="absolute inset-0 z-0">
-          <img 
-            src={interiorImage} 
-            alt="Bronks Barbearia Interior" 
+          <img
+            src={interiorImage}
+            alt="Bronks Barbearia Interior"
             className="w-full h-full object-cover opacity-60"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
@@ -37,10 +48,10 @@ export default function Home() {
               BRONKS <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-400 text-neon">BARBEARIA</span>
             </h1>
             <p className="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto mb-10 font-light">
-              O corte que você respeita, no ambiente que você merece. 
+              O corte que você respeita, no ambiente que você merece.
               Especialistas em degradê, barba e pigmentação.
             </p>
-            
+
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/booking">
                 <Button size="lg" className="h-14 px-8 text-lg font-bold bg-primary hover:bg-primary/90 text-white shadow-[0_0_20px_rgba(168,85,247,0.5)] transition-all hover:scale-105 hover:shadow-[0_0_40px_rgba(168,85,247,0.7)] rounded-full">
@@ -105,10 +116,10 @@ export default function Home() {
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <Scissors className="h-12 w-12 text-primary" />
               </div>
-              
+
               <h3 className="font-heading text-2xl font-bold mb-2 group-hover:text-primary transition-colors">{service.name}</h3>
               <p className="text-muted-foreground mb-6 h-12">{service.description}</p>
-              
+
               <div className="flex items-end justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Duração</p>
@@ -124,7 +135,7 @@ export default function Home() {
         </div>
 
         <div className="mt-16 text-center">
-           <Link href="/booking">
+          <Link href="/booking">
             <Button size="lg" className="h-12 px-10 font-bold bg-white text-black hover:bg-gray-200 hover:text-primary transition-colors rounded-full">
               AGENDAR HORÁRIO
             </Button>
