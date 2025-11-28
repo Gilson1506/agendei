@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertServiceSchema, insertBarberSchema, insertAppointmentSchema } from "@shared/schema";
 import { z } from "zod";
+import { requireAuth } from "./auth";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -35,7 +36,7 @@ export async function registerRoutes(
   });
 
   // Create service
-  app.post("/api/services", async (req, res) => {
+  app.post("/api/services", requireAuth, async (req, res) => {
     try {
       console.log('Received service data:', req.body);
       const validatedData = insertServiceSchema.parse(req.body);
@@ -52,7 +53,7 @@ export async function registerRoutes(
   });
 
   // Update service
-  app.patch("/api/services/:id", async (req, res) => {
+  app.patch("/api/services/:id", requireAuth, async (req, res) => {
     try {
       const updated = await storage.updateService(req.params.id, req.body);
       if (!updated) {
@@ -65,7 +66,7 @@ export async function registerRoutes(
   });
 
   // Delete service
-  app.delete("/api/services/:id", async (req, res) => {
+  app.delete("/api/services/:id", requireAuth, async (req, res) => {
     try {
       const deleted = await storage.deleteService(req.params.id);
       if (!deleted) {
@@ -114,7 +115,7 @@ export async function registerRoutes(
   });
 
   // Create barber (with service associations)
-  app.post("/api/barbers", async (req, res) => {
+  app.post("/api/barbers", requireAuth, async (req, res) => {
     try {
       const { serviceIds, ...barberData } = req.body;
       const validatedData = insertBarberSchema.parse(barberData);
@@ -136,7 +137,7 @@ export async function registerRoutes(
   });
 
   // Update barber (including service associations)
-  app.patch("/api/barbers/:id", async (req, res) => {
+  app.patch("/api/barbers/:id", requireAuth, async (req, res) => {
     try {
       const { serviceIds, ...barberData } = req.body;
 
@@ -163,7 +164,7 @@ export async function registerRoutes(
   });
 
   // Delete barber
-  app.delete("/api/barbers/:id", async (req, res) => {
+  app.delete("/api/barbers/:id", requireAuth, async (req, res) => {
     try {
       const deleted = await storage.deleteBarber(req.params.id);
       if (!deleted) {
@@ -219,7 +220,7 @@ export async function registerRoutes(
   });
 
   // Update appointment
-  app.patch("/api/appointments/:id", async (req, res) => {
+  app.patch("/api/appointments/:id", requireAuth, async (req, res) => {
     try {
       const updated = await storage.updateAppointment(req.params.id, req.body);
       if (!updated) {
@@ -232,7 +233,7 @@ export async function registerRoutes(
   });
 
   // Delete appointment
-  app.delete("/api/appointments/:id", async (req, res) => {
+  app.delete("/api/appointments/:id", requireAuth, async (req, res) => {
     try {
       const deleted = await storage.deleteAppointment(req.params.id);
       if (!deleted) {
@@ -275,7 +276,7 @@ export async function registerRoutes(
   // ========== FILE UPLOAD ROUTES ==========
 
   // Upload barber photo
-  app.post("/api/upload/barber-photo/:barberId", async (req, res) => {
+  app.post("/api/upload/barber-photo/:barberId", requireAuth, async (req, res) => {
     try {
       const { barberId } = req.params;
       const { file, fileName, contentType } = req.body;
@@ -323,7 +324,7 @@ export async function registerRoutes(
   });
 
   // Upload QR code
-  app.post("/api/upload/qr-code/:serviceId", async (req, res) => {
+  app.post("/api/upload/qr-code/:serviceId", requireAuth, async (req, res) => {
     try {
       const { serviceId } = req.params;
       const { file, fileName, contentType } = req.body;

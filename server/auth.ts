@@ -101,4 +101,12 @@ export function setupAuth(app: Express) {
     });
 }
 
+// Middleware to protect routes
+export function requireAuth(req: any, res: any, next: any) {
+    if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Authentication required" });
+    }
+    next();
+}
+
 export { hashPassword };
