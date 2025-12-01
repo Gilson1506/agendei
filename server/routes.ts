@@ -265,7 +265,7 @@ export async function registerRoutes(
         pendingAppointments: pendingCount,
         totalBarbers: barbers.length,
         totalServices: services.length,
-        platformFee: 5.00 // Fixed platform fee
+        platformFee: 8.90 // Fixed platform fee
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
