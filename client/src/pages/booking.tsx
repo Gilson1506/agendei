@@ -44,7 +44,7 @@ export default function BookingPage() {
   const barber = barbers.find(b => b.id === selectedBarber);
 
   // Calculate total with the dynamic platform fee
-  const platformFee = stats?.platformFee || 5.00;
+  const platformFee = stats?.platformFee || 8.90;
   const total = service ? service.price + platformFee : 0;
 
   // Filter barbers based on selected service
