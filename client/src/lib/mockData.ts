@@ -113,4 +113,4 @@ export const MOCK_APPOINTMENTS: Appointment[] = [
   },
 ];
 
-export const PLATFORM_FEE = 8.50;
+export const PLATFORM_FEE = 8.90;
