@@ -198,7 +198,15 @@ export default function AdminDashboard() {
                                 <Eye className="h-4 w-4" />
                               </Button>
                             ) : (
-                              <span className="text-xs text-muted-foreground">-</span>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                disabled
+                                className="h-8 w-8 opacity-50"
+                                title="Sem comprovante"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
                             )}
                           </td>
                           <td className="px-4 py-4">
@@ -957,13 +965,23 @@ function ScheduleManager({ appointments, barbers, services }: { appointments: Ap
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {(apt as Appointment).payment_receipt_url && (
+                          {(apt as Appointment).payment_receipt_url ? (
                             <Button
                               size="icon"
                               variant="outline"
                               onClick={() => setReceiptViewer({ open: true, url: (apt as Appointment).payment_receipt_url || null })}
                               className="h-8 w-8"
                               title="Ver comprovante"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              disabled
+                              className="h-8 w-8 opacity-50"
+                              title="Sem comprovante"
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
