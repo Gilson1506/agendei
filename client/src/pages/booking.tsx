@@ -161,12 +161,8 @@ export default function BookingPage() {
           setIsUploadingReceipt(true);
           try {
             const receiptUrl = await uploadPaymentReceipt(appointment.id, receiptFile);
-            // Update appointment with receipt URL
-            await fetch(`/api/appointments/${appointment.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ payment_receipt_url: receiptUrl })
-            });
+            // The upload endpoint already updates the appointment with the URL
+            // No need to call PATCH again, which requires auth and fails for public users
           } catch (error) {
             console.error('Error uploading receipt:', error);
             toast({
@@ -306,9 +302,9 @@ export default function BookingPage() {
                   </CarouselItem>
                 ))}
               </CarouselContent>
-              <div className="hidden md:block">
-                <CarouselPrevious />
-                <CarouselNext />
+              <div className="flex justify-center gap-4 mt-4 md:absolute md:inset-0 md:mt-0 md:pointer-events-none md:flex md:items-center md:justify-between md:px-4">
+                <CarouselPrevious className="static translate-y-0 md:absolute md:-left-12 md:pointer-events-auto" />
+                <CarouselNext className="static translate-y-0 md:absolute md:-right-12 md:pointer-events-auto" />
               </div>
             </Carousel>
           </motion.div>
