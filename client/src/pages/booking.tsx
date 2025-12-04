@@ -3,6 +3,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -267,28 +274,43 @@ export default function BookingPage() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className="grid grid-cols-1 md:grid-cols-2 gap-4"
+            className="w-full max-w-5xl mx-auto"
           >
-            {services.map((s) => (
-              <div
-                key={s.id}
-                onClick={() => setSelectedService(s.id)}
-                className={`cursor-pointer p-6 rounded-xl border-2 transition-all ${selectedService === s.id
-                  ? "border-primary bg-primary/5 shadow-[0_0_20px_rgba(168,85,247,0.2)]"
-                  : "border-border bg-card hover:border-primary/50"
-                  }`}
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-heading text-xl font-bold">{s.name}</h3>
-                  <span className="text-primary font-bold font-mono">R$ {s.price.toFixed(2)}</span>
-                </div>
-                <p className="text-sm text-muted-foreground mb-4">{s.description}</p>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 w-fit px-2 py-1 rounded">
-                  <Clock className="h-3 w-3" />
-                  {s.duration} min
-                </div>
+            <Carousel
+              opts={{
+                align: "start",
+                loop: true,
+              }}
+              className="w-full"
+            >
+              <CarouselContent className="-ml-4">
+                {services.map((s) => (
+                  <CarouselItem key={s.id} className="pl-4 md:basis-1/2 lg:basis-1/3">
+                    <div
+                      onClick={() => setSelectedService(s.id)}
+                      className={`cursor-pointer p-6 rounded-xl border-2 transition-all h-full flex flex-col ${selectedService === s.id
+                        ? "border-primary bg-primary/5 shadow-[0_0_20px_rgba(168,85,247,0.2)]"
+                        : "border-border bg-card hover:border-primary/50"
+                        }`}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className="font-heading text-xl font-bold line-clamp-1" title={s.name}>{s.name}</h3>
+                        <span className="text-primary font-bold font-mono whitespace-nowrap">R$ {s.price.toFixed(2)}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-4 flex-grow line-clamp-3" title={s.description}>{s.description}</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 w-fit px-2 py-1 rounded mt-auto">
+                        <Clock className="h-3 w-3" />
+                        {s.duration} min
+                      </div>
+                    </div>
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              <div className="hidden md:block">
+                <CarouselPrevious />
+                <CarouselNext />
               </div>
-            ))}
+            </Carousel>
           </motion.div>
         )}
 
