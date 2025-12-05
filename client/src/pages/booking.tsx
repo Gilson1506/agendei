@@ -373,7 +373,11 @@ export default function BookingPage() {
                 onSelect={setDate}
                 locale={ptBR}
                 className="rounded-md border-none"
-                disabled={(date) => date < new Date()}
+                disabled={(date) => {
+                  // Disable past dates and Sundays
+                  if (date < new Date()) return true;
+                  return date.getDay() === 0; // 0 = Sunday
+                }}
               />
             </div>
 
@@ -494,26 +498,27 @@ export default function BookingPage() {
             <p className="text-muted-foreground mb-2">Escaneie o QR Code para pagar</p>
             <div className="text-3xl font-bold text-white mb-6 font-mono">R$ {total.toFixed(2)}</div>
 
-            {/* Link PIX - usar do serviço se disponível */}
+            {/* Botão Copiar Chave PIX - Destacado */}
             {(service?.pix_link || service?.qr_code_url) && (
-              <div className="flex items-center gap-2 bg-card border border-border p-3 rounded-lg mb-8">
-                <div className="flex-1 font-mono text-xs text-muted-foreground truncate">
-                  {service?.pix_link ? (
-                    service.pix_link.substring(0, 40) + '...'
-                  ) : (
-                    '00020126580014br.gov.bcb.pix0136123e4567...'
-                  )}
+              <div className="mb-8 space-y-3">
+                <div className="bg-muted/30 border border-border p-3 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-2">Chave PIX (Email)</p>
+                  <div className="font-mono text-sm text-white break-all">
+                    {service?.pix_link || "00020126580014br.gov.bcb.pix0136123e4567-e89b-12d3-a456-426614174000520400005303986540510.005802BR5913Bronks Barbearia6008Sao Paulo62070503***6304ABCD"}
+                  </div>
                 </div>
                 <Button
-                  size="icon"
-                  variant="ghost"
+                  size="lg"
+                  variant="outline"
                   onClick={() => {
                     const pixCode = service?.pix_link || "00020126580014br.gov.bcb.pix0136123e4567-e89b-12d3-a456-426614174000520400005303986540510.005802BR5913Bronks Barbearia6008Sao Paulo62070503***6304ABCD";
                     navigator.clipboard.writeText(pixCode);
-                    toast({ title: "Código PIX copiado!", description: "Cole no app do seu banco." });
+                    toast({ title: "✓ Chave PIX copiada!", description: "Cole no seu app bancário para pagar.", className: "bg-green-600 text-white border-none" });
                   }}
+                  className="w-full font-bold border-primary text-primary hover:bg-primary hover:text-white transition-all"
                 >
-                  <Copy className="h-4 w-4" />
+                  <Copy className="mr-2 h-5 w-5" />
+                  Copiar Chave PIX
                 </Button>
               </div>
             )}
@@ -538,9 +543,9 @@ export default function BookingPage() {
 
             <Button
               size="lg"
-              className="w-full font-bold bg-primary hover:bg-primary/90 h-14 text-lg rounded-full relative overflow-hidden"
+              className="w-full font-bold bg-primary hover:bg-primary/90 h-14 text-lg rounded-full relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={handlePayment}
-              disabled={isProcessingPayment || isUploadingReceipt}
+              disabled={isProcessingPayment || isUploadingReceipt || !receiptFile}
             >
               {(isProcessingPayment || isUploadingReceipt) && (
                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
@@ -559,7 +564,7 @@ export default function BookingPage() {
             <p className="text-xs text-muted-foreground mt-4">
               {receiptFile
                 ? "Seu agendamento será confirmado após análise do comprovante."
-                : "O sistema irá reconhecer seu pagamento automaticamente."}
+                : "⚠️ Selecione o comprovante de pagamento para continuar."}
             </p>
           </motion.div>
         )}
