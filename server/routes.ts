@@ -254,7 +254,10 @@ export async function registerRoutes(
         storage.getAllBarbers()
       ]);
 
-      const totalRevenue = appointments.reduce((acc, apt) => acc + (apt.total_price || 0), 0);
+      const totalRevenue = appointments.reduce((acc, apt) => {
+        if (apt.status === 'cancelled') return acc;
+        return acc + (Number(apt.total_price) || 0);
+      }, 0);
       const confirmedCount = appointments.filter(a => a.status === 'confirmed').length;
       const pendingCount = appointments.filter(a => a.status === 'pending').length;
 
