@@ -240,6 +240,22 @@ export function useUpdateAppointment() {
     });
 }
 
+export function useDeleteAppointment() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (id: string) => {
+            const res = await fetch(`/api/appointments/${id}`, {
+                method: 'DELETE',
+            });
+            if (!res.ok) throw new Error('Failed to delete appointment');
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['appointments'] });
+            queryClient.invalidateQueries({ queryKey: ['stats'] });
+        },
+    });
+}
+
 
 // Upload functions
 // Helper function to compress image
