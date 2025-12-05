@@ -160,66 +160,75 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {appointments.slice(0, 5).map((apt: any) => {
-                      const service = services.find(s => s.id === apt.service_id);
-                      const barber = barbers.find(b => b.id === apt.barber_id);
-                      return (
-                        <tr key={apt.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                          <td className="px-4 py-4 font-medium text-white">
-                            {apt.customer_name}
-                            <div className="text-xs text-muted-foreground font-normal">{apt.customer_phone}</div>
-                          </td>
-                          <td className="px-4 py-4">{service?.name || "Serviço Removido"}</td>
-                          <td className="px-4 py-4">
-                            <div className="flex items-center gap-2">
-                              {barber && <img src={barber.avatar} className="w-6 h-6 rounded-full bg-muted" alt="" />}
-                              {barber?.name || "N/A"}
-                            </div>
-                          </td>
-                          <td className="px-4 py-4">
-                            {format(new Date(apt.date.endsWith('Z') ? apt.date : apt.date + 'Z'), "dd/MM", { locale: ptBR })}
-                            <span className="ml-2 text-muted-foreground">{format(new Date(apt.date.endsWith('Z') ? apt.date : apt.date + 'Z'), "HH:mm")}</span>
-                          </td>
-                          <td className="px-4 py-4 font-mono">R$ {apt.total_price.toFixed(2)}</td>
-                          <td className="px-4 py-4">
-                            <Badge variant={apt.status === 'confirmed' ? 'default' : 'secondary'} className={apt.status === 'confirmed' ? 'bg-green-500/20 text-green-500 hover:bg-green-500/30' : 'bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30'}>
-                              {apt.status === 'confirmed' ? 'Pago' : 'Pendente'}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-4">
-                            {(apt as Appointment).payment_receipt_url ? (
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                onClick={() => setReceiptViewer({ open: true, url: (apt as Appointment).payment_receipt_url || null })}
-                                className="h-8 w-8"
-                                title="Ver comprovante"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            ) : (
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                disabled
-                                className="h-8 w-8 opacity-50"
-                                title="Sem comprovante"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </td>
-                          <td className="px-4 py-4">
-                            <AppointmentActions
-                              appointment={apt}
-                              updatingId={updatingAppointment}
-                              onUpdate={setUpdatingAppointment}
-                              onCancelRequest={(id) => setCancelDialog({ open: true, appointmentId: id })}
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {appointments
+                      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                      .slice(0, 5)
+                      .map((apt: any) => {
+                        const service = services.find(s => s.id === apt.service_id);
+                        const barber = barbers.find(b => b.id === apt.barber_id);
+                        return (
+                          <tr key={apt.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                            <td className="px-4 py-4 font-medium text-white">
+                              {apt.customer_name}
+                              <div className="text-xs text-muted-foreground font-normal">{apt.customer_phone}</div>
+                            </td>
+                            <td className="px-4 py-4">{service?.name || "Serviço Removido"}</td>
+                            <td className="px-4 py-4">
+                              <div className="flex items-center gap-2">
+                                {barber && <img src={barber.avatar} className="w-6 h-6 rounded-full bg-muted" alt="" />}
+                                {barber?.name || "N/A"}
+                              </div>
+                            </td>
+                            <td className="px-4 py-4">
+                              {format(new Date(apt.date.endsWith('Z') ? apt.date : apt.date + 'Z'), "dd/MM", { locale: ptBR })}
+                              <span className="ml-2 text-muted-foreground">{format(new Date(apt.date.endsWith('Z') ? apt.date : apt.date + 'Z'), "HH:mm")}</span>
+                            </td>
+                            <td className="px-4 py-4 font-mono">R$ {apt.total_price.toFixed(2)}</td>
+                            <td className="px-4 py-4">
+                              <Badge variant={apt.status === 'confirmed' ? 'default' : apt.status === 'completed' ? 'secondary' : apt.status === 'cancelled' ? 'destructive' : 'outline'}
+                                className={
+                                  apt.status === 'confirmed' ? 'bg-green-500/20 text-green-500 hover:bg-green-500/30' :
+                                    apt.status === 'completed' ? 'bg-blue-500/20 text-blue-500 hover:bg-blue-500/30' :
+                                      apt.status === 'cancelled' ? 'bg-red-500/20 text-red-500 hover:bg-red-500/30' :
+                                        'bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30'
+                                }>
+                                {apt.status === 'confirmed' ? 'Confirmado' : apt.status === 'completed' ? 'Concluído' : apt.status === 'cancelled' ? 'Cancelado' : 'Pendente'}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-4">
+                              {(apt as Appointment).payment_receipt_url ? (
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  onClick={() => setReceiptViewer({ open: true, url: (apt as Appointment).payment_receipt_url || null })}
+                                  className="h-8 w-8"
+                                  title="Ver comprovante"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  disabled
+                                  className="h-8 w-8 opacity-50"
+                                  title="Sem comprovante"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </td>
+                            <td className="px-4 py-4">
+                              <AppointmentActions
+                                appointment={apt}
+                                updatingId={updatingAppointment}
+                                onUpdate={setUpdatingAppointment}
+                                onCancelRequest={(id) => setCancelDialog({ open: true, appointmentId: id })}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
