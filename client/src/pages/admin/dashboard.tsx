@@ -19,7 +19,7 @@ import {
   useStats, useServices, useBarbers, useAppointments,
   useCreateService, useUpdateService, useDeleteService,
   useCreateBarber, useUpdateBarber, useDeleteBarber,
-  useUpdateAppointment,
+  useUpdateAppointment, useDeleteAppointment,
   uploadBarberPhoto, uploadQRCode,
   type Service, type Barber, type Appointment
 } from "@/hooks/use-api";
@@ -326,6 +326,8 @@ function AppointmentActions({ appointment, updatingId, onUpdate, onCancelRequest
 }) {
   const { toast } = useToast();
   const updateAppointment = useUpdateAppointment();
+  const deleteAppointment = useDeleteAppointment();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const isUpdating = updatingId === appointment.id;
 
   const handleStatusUpdate = async (newStatus: string) => {
@@ -350,6 +352,28 @@ function AppointmentActions({ appointment, updatingId, onUpdate, onCancelRequest
         }
       }
     );
+  };
+
+  const handleDelete = () => {
+    onUpdate(appointment.id);
+    deleteAppointment.mutate(appointment.id, {
+      onSuccess: () => {
+        toast({
+          title: "Agendamento Apagado",
+          description: "O agendamento foi removido permanentemente."
+        });
+        onUpdate(null);
+        setShowDeleteConfirm(false);
+      },
+      onError: () => {
+        toast({
+          title: "Erro",
+          description: "Falha ao apagar agendamento.",
+          variant: "destructive"
+        });
+        onUpdate(null);
+      }
+    });
   };
 
   return (
@@ -388,6 +412,56 @@ function AppointmentActions({ appointment, updatingId, onUpdate, onCancelRequest
       >
         {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
       </Button>
+      <Button
+        size="icon"
+        variant="outline"
+        onClick={() => setShowDeleteConfirm(true)}
+        disabled={isUpdating}
+        className="h-8 w-8 text-orange-500 hover:text-orange-600 hover:bg-orange-500/10"
+        title="Apagar agendamento"
+      >
+        {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+      </Button>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="bg-card border-border text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-orange-500 flex items-center gap-2">
+              <Trash2 className="h-6 w-6" />
+              Apagar Agendamento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-muted-foreground mb-4">
+              Tem certeza que deseja apagar este agendamento permanentemente?
+            </p>
+            <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
+              <p className="text-sm text-orange-500">
+                ⚠️ Esta ação é irreversível. O agendamento será removido do sistema.
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={isUpdating}
+              className="flex-1"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleDelete}
+              disabled={isUpdating}
+              className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+            >
+              {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Sim, apagar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
