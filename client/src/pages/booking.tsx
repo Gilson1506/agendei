@@ -290,7 +290,7 @@ export default function BookingPage() {
                         }`}
                     >
                       <div className="flex justify-between items-start mb-2">
-                        <h3 className="font-heading text-xl font-bold" title={s.name}>{s.name}</h3>
+                        <h3 className="font-heading text-xl font-bold break-words pr-2" title={s.name}>{s.name}</h3>
                         <span className="text-primary font-bold font-mono whitespace-nowrap">R$ {s.price.toFixed(2)}</span>
                       </div>
                       <p className="text-sm text-muted-foreground mb-4 flex-grow line-clamp-3" title={s.description}>{s.description}</p>
