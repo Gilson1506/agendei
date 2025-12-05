@@ -91,13 +91,13 @@ export default function BookingPage() {
       if (apt.status === 'cancelled') return false;
       if (!apt.date) return false;
 
-      // Parse as UTC by appending 'Z' if not present
-      const aptDate = new Date(apt.date.endsWith('Z') ? apt.date : apt.date + 'Z');
+      // Parse date string directly (no timezone conversion)
+      const aptDate = new Date(apt.date);
 
-      // Check if it's the same day (in local time)
+      // Check if it's the same day
       if (!isSameDay(aptDate, date)) return false;
 
-      // Check if it's the same time (in local time)
+      // Check if it's the same time
       const aptTime = format(aptDate, "HH:mm");
       return aptTime === time;
     });
@@ -140,23 +140,21 @@ export default function BookingPage() {
       return;
     }
 
-    // Create date object with time in UTC to avoid timezone conversion
+    // Create simple date string without timezone conversion
     const [hours, minutes] = selectedTime.split(':').map(Number);
-    // Use UTC methods to preserve the selected local time when converting to ISO
-    const aptDate = new Date(Date.UTC(
-      date.getFullYear(),
-      date.getMonth(),
-      date.getDate(),
-      hours,
-      minutes,
-      0,
-      0
-    ));
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hoursStr = String(hours).padStart(2, '0');
+    const minutesStr = String(minutes).padStart(2, '0');
+
+    // Format: YYYY-MM-DDTHH:mm:ss (no Z suffix = treated as local time)
+    const aptDateString = `${year}-${month}-${day}T${hoursStr}:${minutesStr}:00`;
 
     const appointmentData: any = {
       service_id: service.id,
       barber_id: barber.id,
-      date: aptDate.toISOString(),
+      date: aptDateString,
       customer_name: customerName,
       customer_phone: customerPhone,
       status: receiptFile ? "pending" : "confirmed", // If receipt uploaded, wait for confirmation
