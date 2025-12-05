@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Check, ChevronRight, ChevronLeft, Clock, Calendar as CalendarIcon, CreditCard, Copy, Loader2 } from "lucide-react";
+import { Check, ChevronRight, ChevronLeft, Clock, Calendar as CalendarIcon, CreditCard, Copy, Loader2, Upload } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { format, addDays, isSameDay, setHours, setMinutes, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
