@@ -314,7 +314,8 @@ export async function registerRoutes(
       const url = await storage.uploadPaymentReceipt(appointmentId, fileBuffer, fileName, contentType);
 
       // Update appointment with receipt URL
-      await storage.updateAppointment(appointmentId, { payment_receipt_url: url });
+      // storage.updateAppointment expects camelCase keys as per InsertAppointment schema
+      await storage.updateAppointment(appointmentId, { paymentReceiptUrl: url });
 
       res.json({ url });
     } catch (error) {
