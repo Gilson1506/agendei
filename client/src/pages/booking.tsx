@@ -91,12 +91,13 @@ export default function BookingPage() {
       if (apt.status === 'cancelled') return false;
       if (!apt.date) return false;
 
-      const aptDate = parseISO(apt.date);
+      // Parse as UTC by appending 'Z' if not present
+      const aptDate = new Date(apt.date.endsWith('Z') ? apt.date : apt.date + 'Z');
 
-      // Check if it's the same day
+      // Check if it's the same day (in local time)
       if (!isSameDay(aptDate, date)) return false;
 
-      // Check if it's the same time
+      // Check if it's the same time (in local time)
       const aptTime = format(aptDate, "HH:mm");
       return aptTime === time;
     });
@@ -139,9 +140,18 @@ export default function BookingPage() {
       return;
     }
 
-    // Create date object with time
+    // Create date object with time in UTC to avoid timezone conversion
     const [hours, minutes] = selectedTime.split(':').map(Number);
-    const aptDate = setMinutes(setHours(date, hours), minutes);
+    // Use UTC methods to preserve the selected local time when converting to ISO
+    const aptDate = new Date(Date.UTC(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      hours,
+      minutes,
+      0,
+      0
+    ));
 
     const appointmentData: any = {
       service_id: service.id,
