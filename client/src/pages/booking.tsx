@@ -523,22 +523,71 @@ export default function BookingPage() {
               </div>
             )}
 
-            <div className="space-y-4 mb-6">
-              <div className="space-y-2">
-                <Label htmlFor="receipt" className="text-sm font-medium">Enviar Comprovante (Opcional)</Label>
-                <Input
-                  id="receipt"
+            {/* Upload de Comprovante - Visual Melhorado */}
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                <Upload className="h-5 w-5 text-primary" />
+                Comprovante
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Após realizar o pagamento, tire um print do comprovante e envie aqui.
+              </p>
+
+              <label
+                htmlFor="receipt-upload"
+                className={`
+                  relative block w-full p-8 rounded-xl border-2 border-dashed cursor-pointer
+                  transition-all duration-200
+                  ${receiptFile
+                    ? 'border-green-500 bg-green-500/10'
+                    : 'border-primary/50 bg-primary/5 hover:border-primary hover:bg-primary/10'
+                  }
+                `}
+              >
+                <input
+                  id="receipt-upload"
                   type="file"
                   accept="image/*,.pdf"
                   onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-                  className="bg-card border-border"
+                  className="hidden"
                 />
-                {receiptFile && (
-                  <p className="text-xs text-muted-foreground">
-                    Arquivo selecionado: {receiptFile.name}
-                  </p>
-                )}
-              </div>
+
+                <div className="flex flex-col items-center justify-center gap-3">
+                  {receiptFile ? (
+                    <>
+                      <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center">
+                        <Check className="h-6 w-6 text-green-500" />
+                      </div>
+                      <div className="text-center">
+                        <p className="font-medium text-green-500">Arquivo selecionado!</p>
+                        <p className="text-xs text-muted-foreground mt-1">{receiptFile.name}</p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setReceiptFile(null);
+                        }}
+                        className="mt-2"
+                      >
+                        Remover arquivo
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                        <Upload className="h-6 w-6 text-primary" />
+                      </div>
+                      <div className="text-center">
+                        <p className="font-medium text-white">Toque para anexar comprovante</p>
+                        <p className="text-xs text-muted-foreground mt-1">PNG, JPG ou PDF (máx. 10MB)</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </label>
             </div>
 
             <Button
