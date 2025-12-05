@@ -180,8 +180,8 @@ export default function AdminDashboard() {
                               </div>
                             </td>
                             <td className="px-4 py-4">
-                              {format(new Date(apt.date.endsWith('Z') ? apt.date : apt.date + 'Z'), "dd/MM", { locale: ptBR })}
-                              <span className="ml-2 text-muted-foreground">{format(new Date(apt.date.endsWith('Z') ? apt.date : apt.date + 'Z'), "HH:mm")}</span>
+                              {format(new Date(apt.date), "dd/MM", { locale: ptBR })}
+                              <span className="ml-2 text-muted-foreground">{format(new Date(apt.date), "HH:mm")}</span>
                             </td>
                             <td className="px-4 py-4 font-mono">R$ {apt.total_price.toFixed(2)}</td>
                             <td className="px-4 py-4">
@@ -906,14 +906,14 @@ function ScheduleManager({ appointments, barbers, services }: { appointments: Ap
   const [cancelDialog, setCancelDialog] = useState<{ open: boolean; appointmentId: string | null }>({ open: false, appointmentId: null });
 
   const sortedAppointments = [...appointments].sort((a, b) => {
-    const dateA = new Date(a.date.endsWith('Z') ? a.date : a.date + 'Z');
-    const dateB = new Date(b.date.endsWith('Z') ? b.date : b.date + 'Z');
+    const dateA = new Date(a.date);
+    const dateB = new Date(b.date);
     return dateA.getTime() - dateB.getTime();
   });
 
   // Group by date (using local date)
   const groupedAppointments = sortedAppointments.reduce((groups, apt) => {
-    const dateObj = new Date(apt.date.endsWith('Z') ? apt.date : apt.date + 'Z');
+    const dateObj = new Date(apt.date);
     const dateKey = format(dateObj, 'yyyy-MM-dd');
 
     if (!groups[dateKey]) {
@@ -951,7 +951,7 @@ function ScheduleManager({ appointments, barbers, services }: { appointments: Ap
                       <div className="flex items-center gap-4">
                         <div className="flex flex-col items-center justify-center min-w-[60px] px-2 py-1 bg-primary/10 rounded text-primary font-bold">
                           <Clock className="h-4 w-4 mb-1" />
-                          {format(new Date(apt.date.endsWith('Z') ? apt.date : apt.date + 'Z'), "HH:mm")}
+                          {format(new Date(apt.date), "HH:mm")}
                         </div>
                         <div>
                           <h4 className="font-bold text-lg">{apt.customer_name}</h4>
