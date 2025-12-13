@@ -1,456 +1,65 @@
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Calendar } from "@/components/ui/calendar";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/hooks/use-toast";
-import { Check, ChevronRight, ChevronLeft, Clock, Calendar as CalendarIcon, Loader2 } from "lucide-react";
+-- 1. Create team_members table for the "Members" (Membros) page
+CREATE TABLE IF NOT EXISTS team_members (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id),
+  full_name VARCHAR(255) NOT NULL,
+  role VARCHAR(100) NOT NULL, -- e.g., 'Presidente', 'Diretor', etc.
+  bio TEXT,
+  image_url VARCHAR(500),
+  order_index INTEGER DEFAULT 0,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
-import { format, addDays, isSameDay, setHours, setMinutes, parseISO } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { Link } from "wouter";
-import { useServices, useBarbers, useAppointments, useCreateAppointment } from "@/hooks/use-api";
+-- Enable RLS for team_members
+ALTER TABLE team_members ENABLE ROW LEVEL SECURITY;
 
-const TIME_SLOTS = [
-  "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00", "18:30", "19:00", "19:30", "20:00"
-];
+-- Policies for team_members
+-- Public read access
+DROP POLICY IF EXISTS "Public read access for active team members" ON team_members;
+CREATE POLICY "Public read access for active team members" ON team_members 
+  FOR SELECT USING (is_active = true);
 
-export default function BookingPage() {
-  // Fetch data from API
-  const { data: services = [], isLoading: servicesLoading } = useServices();
-  const { data: barbers = [], isLoading: barbersLoading } = useBarbers();
-  const { data: appointments = [], isLoading: appointmentsLoading } = useAppointments();
-  const createAppointment = useCreateAppointment();
+-- Admin full access
+DROP POLICY IF EXISTS "Admin full access to team_members" ON team_members;
+CREATE POLICY "Admin full access to team_members" ON team_members FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM admin_users au 
+    WHERE au.email = auth.jwt() ->> 'email' 
+    AND au.is_active = true
+  )
+);
 
-  const [step, setStep] = useState(1);
-  const [selectedService, setSelectedService] = useState<string | null>(null);
-  const [selectedBarber, setSelectedBarber] = useState<string | null>(null);
-  const [date, setDate] = useState<Date | undefined>(new Date());
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
-  const [isCreatingAppointment, setIsCreatingAppointment] = useState(false);
-  const [appointmentConfirmed, setAppointmentConfirmed] = useState(false);
-  const { toast } = useToast();
+-- 2. Create applications table if it doesn't exist
+CREATE TABLE IF NOT EXISTS applications (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  full_name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  phone VARCHAR(20),
+  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'under_review', 'approved', 'rejected')),
+  notes TEXT,
+  attachments TEXT[] DEFAULT '{}',
+  video_conference_link VARCHAR(500),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
-  const service = services.find(s => s.id === selectedService);
-  const barber = barbers.find(b => b.id === selectedBarber);
+-- Enable RLS for applications
+ALTER TABLE applications ENABLE ROW LEVEL SECURITY;
 
-  // Total is just the service price (no fees)
-  const total = service ? service.price : 0;
+-- 3. Policies for applications
+-- Admin full access to applications
+DROP POLICY IF EXISTS "Admin full access to applications" ON applications;
+CREATE POLICY "Admin full access to applications" ON applications FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM admin_users au 
+    WHERE au.email = auth.jwt() ->> 'email' 
+    AND au.is_active = true
+  )
+);
 
-  // Filter barbers based on selected service
-  const availableBarbers = selectedService
-    ? barbers.filter(b => b.serviceIds.includes(selectedService))
-    : [];
-
-  // Reset barber selection if service changes and current barber doesn't support it
-  useEffect(() => {
-    if (selectedBarber && selectedService) {
-      const b = barbers.find(b => b.id === selectedBarber);
-      if (b && !b.serviceIds.includes(selectedService)) {
-        setSelectedBarber(null);
-      }
-    }
-  }, [selectedService, barbers, selectedBarber]);
-
-  // Show loading state
-  if (servicesLoading || barbersLoading || appointmentsLoading) {
-    return (
-      <div className="container mx-auto py-8 px-4 flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Carregando dados...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Helper to check if a time slot is occupied
-  const isTimeSlotOccupied = (time: string) => {
-    if (!date || !selectedBarber) return false;
-
-    return appointments.some(apt => {
-      // Only check appointments for the selected barber
-      if (apt.barber_id !== selectedBarber) return false;
-      if (apt.status === 'cancelled') return false;
-      if (!apt.date) return false;
-
-      const aptDate = parseISO(apt.date);
-
-      // Check if it's the same day
-      if (!isSameDay(aptDate, date)) return false;
-
-      // Check if it's the same time
-      const aptTime = format(aptDate, "HH:mm");
-      return aptTime === time;
-    });
-  };
-
-  const handleNext = () => {
-    if (step === 1 && !selectedService) {
-      toast({ title: "Selecione um serviço", variant: "destructive" });
-      return;
-    }
-    if (step === 2 && !selectedBarber) {
-      toast({ title: "Selecione um barbeiro", variant: "destructive" });
-      return;
-    }
-    if (step === 3 && (!date || !selectedTime)) {
-      toast({ title: "Selecione data e horário", variant: "destructive" });
-      return;
-    }
-    if (step === 4 && (!customerName || !customerPhone)) {
-      toast({ title: "Preencha seus dados", variant: "destructive" });
-      return;
-    }
-    if (step === 4) {
-      handleAppointmentCreation();
-      return;
-    }
-    setStep(step + 1);
-  };
-
-  const handleBack = () => {
-    setStep(step - 1);
-  };
-
-  const handleAppointmentCreation = () => {
-    setIsCreatingAppointment(true);
-
-    if (!service || !barber || !date || !selectedTime) {
-      toast({
-        title: "Erro",
-        description: "Dados incompletos.",
-        variant: "destructive"
-      });
-      setIsCreatingAppointment(false);
-      return;
-    }
-
-    // Create date object with time
-    const [hours, minutes] = selectedTime.split(':').map(Number);
-    const aptDate = setMinutes(setHours(date, hours), minutes);
-
-    const appointmentData: any = {
-      service_id: service.id,
-      barber_id: barber.id,
-      date: aptDate.toISOString(),
-      customer_name: customerName,
-      customer_phone: customerPhone,
-      status: "confirmed",
-      total_price: total
-    };
-
-    // Create appointment
-    createAppointment.mutate(appointmentData, {
-      onSuccess: () => {
-        setAppointmentConfirmed(true);
-        setIsCreatingAppointment(false);
-        toast({
-          title: "Agendamento Confirmado!",
-          description: "Seu agendamento foi realizado com sucesso.",
-          className: "bg-green-600 text-white border-none"
-        });
-      },
-      onError: () => {
-        setIsCreatingAppointment(false);
-        toast({
-          title: "Erro ao criar agendamento",
-          description: "Tente novamente.",
-          variant: "destructive"
-        });
-      }
-    });
-  };
-
-  if (appointmentConfirmed) {
-    return (
-      <div className="container max-w-md mx-auto py-20 px-4 text-center">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="bg-card border border-green-500/30 p-8 rounded-3xl flex flex-col items-center gap-6 shadow-[0_0_50px_rgba(34,197,94,0.2)]"
-        >
-          <div className="h-24 w-24 rounded-full bg-green-500/20 flex items-center justify-center">
-            <Check className="h-12 w-12 text-green-500" />
-          </div>
-          <div>
-            <h2 className="font-heading text-3xl font-bold text-white mb-2">AGENDADO!</h2>
-            <p className="text-muted-foreground">Te esperamos na data marcada.</p>
-          </div>
-
-          <div className="w-full bg-muted/50 p-4 rounded-xl text-left text-sm space-y-2">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Serviço:</span>
-              <span className="font-bold text-white">{service?.name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Barbeiro:</span>
-              <span className="font-bold text-white">{barber?.name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Data:</span>
-              <span className="font-bold text-white">
-                {date && format(date, "dd 'de' MMMM", { locale: ptBR })} às {selectedTime}
-              </span>
-            </div>
-          </div>
-
-          <Link href="/">
-            <Button className="w-full bg-green-600 hover:bg-green-700 text-white font-bold">
-              VOLTAR AO INÍCIO
-            </Button>
-          </Link>
-        </motion.div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="container max-w-4xl mx-auto py-12 px-4">
-      <div className="mb-8">
-        <h1 className="font-heading text-3xl md:text-4xl font-bold mb-2 text-neon">AGENDAMENTO</h1>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className={step >= 1 ? "text-primary font-bold" : ""}>1. Serviço</span>
-          <ChevronRight className="h-4 w-4" />
-          <span className={step >= 2 ? "text-primary font-bold" : ""}>2. Profissional</span>
-          <ChevronRight className="h-4 w-4" />
-          <span className={step >= 3 ? "text-primary font-bold" : ""}>3. Data</span>
-          <ChevronRight className="h-4 w-4" />
-          <span className={step >= 4 ? "text-primary font-bold" : ""}>4. Confirmar</span>
-        </div>
-        <div className="h-1 w-full bg-muted mt-4 rounded-full overflow-hidden">
-          <motion.div
-            className="h-full bg-primary"
-            initial={{ width: 0 }}
-            animate={{ width: `${(step / 4) * 100}%` }}
-          />
-        </div>
-      </div>
-
-      <AnimatePresence mode="wait">
-        {step === 1 && (
-          <motion.div
-            key="step1"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="grid grid-cols-1 md:grid-cols-2 gap-4"
-          >
-            {services.map((s) => (
-              <div
-                key={s.id}
-                onClick={() => setSelectedService(s.id)}
-                className={`cursor-pointer p-6 rounded-xl border-2 transition-all ${selectedService === s.id
-                  ? "border-primary bg-primary/5 shadow-[0_0_20px_rgba(168,85,247,0.2)]"
-                  : "border-border bg-card hover:border-primary/50"
-                  }`}
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-heading text-xl font-bold">{s.name}</h3>
-                  <span className="text-primary font-bold font-mono">R$ {s.price.toFixed(2)}</span>
-                </div>
-                <p className="text-sm text-muted-foreground mb-4">{s.description}</p>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 w-fit px-2 py-1 rounded">
-                  <Clock className="h-3 w-3" />
-                  {s.duration} min
-                </div>
-              </div>
-            ))}
-          </motion.div>
-        )}
-
-        {step === 2 && (
-          <motion.div
-            key="step2"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-          >
-            {availableBarbers.length === 0 ? (
-              <div className="text-center py-10">
-                <p className="text-muted-foreground">Nenhum profissional disponível para este serviço no momento.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {availableBarbers.map((b) => (
-                  <div
-                    key={b.id}
-                    onClick={() => setSelectedBarber(b.id)}
-                    className={`cursor-pointer p-6 rounded-xl border-2 flex flex-col items-center gap-4 transition-all ${selectedBarber === b.id
-                      ? "border-primary bg-primary/5 scale-105"
-                      : "border-border bg-card hover:border-primary/50"
-                      }`}
-                  >
-                    <div className="h-24 w-24 rounded-full overflow-hidden bg-muted border-2 border-border">
-                      <img
-                        src={(b as any).profile_photo_url || b.avatar}
-                        alt={b.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="text-center">
-                      <h3 className="font-heading font-bold">{b.name}</h3>
-                      <p className="text-xs text-muted-foreground">Barbeiro Profissional</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        {step === 3 && (
-          <motion.div
-            key="step3"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="flex flex-col md:flex-row gap-8"
-          >
-            <div className="bg-card p-4 rounded-xl border border-border w-fit mx-auto md:mx-0">
-              <Calendar
-                mode="single"
-                selected={date}
-                onSelect={setDate}
-                locale={ptBR}
-                className="rounded-md border-none"
-                disabled={(date) => date < new Date()}
-              />
-            </div>
-
-            <div className="flex-1">
-              <h3 className="font-heading text-lg font-bold mb-4">Horários Disponíveis</h3>
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                {TIME_SLOTS.map((time) => {
-                  const isOccupied = isTimeSlotOccupied(time);
-                  return (
-                    <Button
-                      key={time}
-                      variant={selectedTime === time ? "default" : "outline"}
-                      onClick={() => !isOccupied && setSelectedTime(time)}
-                      disabled={isOccupied}
-                      className={`w-full relative ${selectedTime === time
-                        ? "bg-primary text-white hover:bg-primary/90"
-                        : isOccupied
-                          ? "opacity-100 cursor-not-allowed bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30"
-                          : "hover:border-primary"
-                        }`}
-                    >
-                      <div className="flex flex-col items-center">
-                        <span className="font-bold">{time}</span>
-                        {isOccupied && (
-                          <span className="text-[10px] font-normal mt-0.5">Ocupado</span>
-                        )}
-                      </div>
-                    </Button>
-                  );
-                })}
-              </div>
-              {date && selectedTime && (
-                <div className="mt-6 p-4 bg-primary/10 border border-primary/30 rounded-lg text-center">
-                  <p className="text-sm text-muted-foreground">Você selecionou:</p>
-                  <p className="font-bold text-lg text-primary">
-                    {format(date, "dd 'de' MMMM", { locale: ptBR })} às {selectedTime}
-                  </p>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-
-        {step === 4 && (
-          <motion.div
-            key="step4"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="max-w-md mx-auto space-y-6"
-          >
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome Completo</Label>
-              <Input
-                id="name"
-                placeholder="Seu nome"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                className="bg-card border-border h-12"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Telefone / WhatsApp</Label>
-              <Input
-                id="phone"
-                placeholder="(11) 99999-9999"
-                value={customerPhone}
-                onChange={(e) => setCustomerPhone(e.target.value)}
-                className="bg-card border-border h-12"
-              />
-            </div>
-
-            <div className="bg-card p-6 rounded-xl border border-border mt-8">
-              <h3 className="font-heading font-bold mb-4 border-b border-border pb-2">Resumo do Agendamento</h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Serviço:</span>
-                  <span className="font-semibold">{service?.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Profissional:</span>
-                  <span className="font-semibold">{barber?.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Data:</span>
-                  <span className="font-semibold">
-                    {date && format(date, "dd 'de' MMMM", { locale: ptBR })} às {selectedTime}
-                  </span>
-                </div>
-                <Separator className="my-2" />
-                <div className="flex justify-between text-lg font-bold text-primary">
-                  <span>TOTAL</span>
-                  <span>R$ {total.toFixed(2)}</span>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-
-      </AnimatePresence>
-
-      {/* Navigation Buttons */}
-      {!appointmentConfirmed && (
-        <div className="mt-12 flex flex-col sm:flex-row gap-3 sm:gap-0 sm:justify-between">
-          <Button
-            variant="outline"
-            onClick={handleBack}
-            disabled={step === 1 || isCreatingAppointment}
-            className="w-full sm:w-32 h-12 sm:h-10 order-2 sm:order-1"
-          >
-            <ChevronLeft className="mr-2 h-4 w-4" /> Voltar
-          </Button>
-          <Button
-            onClick={handleNext}
-            disabled={isCreatingAppointment}
-            className="w-full sm:w-auto sm:min-w-[180px] h-12 sm:h-10 bg-primary hover:bg-primary/90 text-white font-bold relative order-1 sm:order-2 text-sm sm:text-base px-4 sm:px-6"
-          >
-            {isCreatingAppointment && (
-              <div className="absolute inset-0 bg-black/20 flex items-center justify-center rounded-md">
-                <Loader2 className="h-5 w-5 animate-spin text-white" />
-              </div>
-            )}
-            <span className="truncate">
-              {step === 4 ? (isCreatingAppointment ? "Agendando..." : "Confirmar Agendamento") : "Próximo"}
-            </span>
-            {!isCreatingAppointment && <ChevronRight className="ml-2 h-4 w-4 flex-shrink-0" />}
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
+-- Allow public to insert applications (for the form on the website)
+DROP POLICY IF EXISTS "Public insert access to applications" ON applications;
+CREATE POLICY "Public insert access to applications" ON applications 
+  FOR INSERT WITH CHECK (true);
